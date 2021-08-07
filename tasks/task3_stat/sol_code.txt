@@ -1,0 +1,79 @@
+ods graphics on;
+* ANOVA ;
+
+* Task1-2 ;
+proc glm data=sashelp.cars plots(unpack only)=diagnostics;
+  class MPG_CITY;
+  model HorsePower=MPG_CITY;
+  means MPG_CITY / hovtest welch;
+  title "TASK 1-2: One-Way ANOVA with MPG_CITY as Predictor";
+run;
+quit;
+
+* Task3;
+proc glm data=sashelp.cars order=internal;
+    class MPG_CITY Origin;
+    model HorsePower=MPG_CITY Origin MPG_CITY*Origin;
+    title "TASK 3: Two-Way ANOVA";
+run;
+quit;
+
+* Linear regression ;
+
+* Task1 ;
+proc reg data=sashelp.cars;
+    model Invoice = HorsePower;
+    title 'TASK 1: Linear Regression for Invoice by HorsePower';
+run;
+quit;
+
+* Task2 ;
+proc reg data=sashelp.cars;
+    model HorsePower = EngineSize
+                       Cylinders;
+    title 'TASK 2: Linear Regression for HorsePower by EngineSize and Cylinders';
+run;
+quit;
+
+* Task3 ;
+
+proc reg data=sashelp.cars plots(only)=(rsquare adjrsq cp);
+   FORWARD:  model HorsePower = EngineSize Cylinders
+                                Weight Wheelbase
+            / selection=forward rsquare adjrsq cp;
+   title 'TASK 3: Best Models Using Forward Selection With Different Criterions';
+run;
+quit;
+
+* Task4 ;
+
+proc reg data=sashelp.cars noprint;
+  model HorsePower = EngineSize
+                     Cylinders;
+  output out=check_norm r=resid_norm;
+  title 'TASK 4: Linear regression for HorsePower by EngineSize and Cylinders';
+run;
+quit;
+
+proc univariate data=check_norm normal;
+  var resid_norm;
+  title 'TASK 4: Normality Test';
+run;
+quit;
+
+* Task5 ;
+proc reg data=sashelp.cars plots (label)= all;
+       model HorsePower = EngineSize
+                       Cylinders / spec ;   
+   output out=check r=residual p=pred;
+run;                               
+
+data check;
+   set check;
+   abserror=abs(residual);
+run;
+
+proc corr data=check spearman nosimple;
+   var abserror pred;
+   title 'TASK 5: Spearman Corr-n';
+run;

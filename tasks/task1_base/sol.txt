@@ -1,0 +1,794 @@
+/* Сухарников Андрей Б05-812 */
+
+/* --------------- КОД --------------- */
+
+libname orion '/var/data/mipt';
+
+/*Task1*/
+
+data work.birthday(keep=Customer_Name Birth_Date Bday2012 BdayDOW2012 Age2012);
+  set orion.customer;
+  format Bday2012 date9.;
+  length BdayDOW2012 8;
+  format Age2012 10.;
+
+  Bday2012 = MDY(month(Birth_Date), day(Birth_Date), 2012);
+  BdayDOW2012 = weekday(Bday2012);
+  Age2012 = (Bday2012 - Birth_Date) / 365.25;
+run;
+
+proc print data=work.birthday;
+run;
+
+/*Task2*/
+
+data work.season(keep=Customer_FirstName 
+                      Customer_LastName 
+                      Customer_BirthDate 
+                      Customer_Age
+                      Promo
+                      Promo2);
+  set orion.customer_dim;
+  length Promo $32;
+  length qtr_val 8;
+  length Promo2 $32;
+  
+  qtr_val = qtr(Customer_BirthDate);
+  if qtr_val = 1 then Promo = 'Winter';
+  if qtr_val = 2 then Promo = 'Spring';
+  if qtr_val = 3 then Promo = 'Summer';
+  if qtr_val = 4 then Promo = 'Fall';
+
+  if Customer_Age >= 18 and Customer_Age <= 25 then Promo2 = 'YA';
+  else if Customer_Age > 65 then Promo2 = 'Senior';
+  else Promo2 = '';
+run;
+
+proc print data=work.season;
+  var Customer_FirstName
+      Customer_LastName 
+      Customer_BirthDate 
+      Promo
+      Customer_Age
+      Promo2;
+run;
+
+/*Task3*/
+
+data work.ordertype(drop=Order_Type Employee_ID Customer_ID);
+  set orion.orders;
+  length DayOfWeek 8;
+  DayOfWeek = weekday(Order_Date);
+  length Type $20;
+  if Order_Type = 1 then Type = 'Retail Sale';
+  if Order_Type = 2 then Type = 'Catalog Sale';
+  if Order_Type = 3 then Type = 'Internet Sale';
+  length SaleAds $8;
+  if Order_Type = 2 then SaleAds = 'Mail';
+  if Order_Type = 3 then SaleAds = 'Email';
+run;
+
+proc print data=work.ordertype;
+  var Order_ID Order_Date Delivery_Date Type SaleAds DayOfWeek;
+run;
+
+/*Task4*/
+
+proc sql;
+  create table work.cr_table
+    (customer_id num length=8,
+    customer_name char length=32,
+    customer_job char length=64,
+    regist_date num format=date9.);
+run;
+
+/*Task5*/
+
+data work.source;
+  length customer_id 8;
+  length customer_name $32;
+  length customer_job $64;
+  format regist_date date9.;
+
+  customer_id = 1;
+  customer_name = 'Bob';
+  customer_job = 'Student';
+  regist_date = '25JAN1995'd;
+  output;
+  customer_id = 2;
+  customer_name = 'James';
+  customer_job = 'Director';
+  regist_date = '17JUN1983'd;
+  output;
+run;
+
+/*Task6*/
+
+proc sql noprint;
+  insert into work.cr_table
+  select * from work.source;
+
+  insert into work.cr_table
+  values (3, 'John', 'Programmer', '01JAN2001'd);
+run;
+
+/*Task7*/
+
+proc sql noprint;
+  alter table work.cr_table
+  modify customer_id num label='ID сотрудника';
+  alter table work.cr_table
+  modify customer_job char label='Профессия сотрудника';
+run;
+
+/*Task8*/
+
+proc sql;
+  alter table work.cr_table
+  add customer_age num length=8;
+
+  update work.cr_table
+  set customer_age=int((today() - regist_date) / 365.25);
+run;
+
+/*Task9*/
+
+proc sql;
+  delete from work.cr_table
+  where customer_age>25;
+run;
+
+/*Task10*/
+
+data work.suppliers;
+	infile datalines delimiter=',';
+   input Supplier_Category $
+					Supplier_Country $
+					Supplier_Name $
+					Salary :8.
+					Hier_date :date9.
+					;
+datalines;
+Sports,DK,Jack,1200,01OCT2015
+Sports,DK,Boris,800,01JAN2015
+Sports,DK,James,1900,01DEC2014
+Trading,US,Bill,2000,01DEC2016
+Outdoor,AU,Peter,2000,01APR2018
+Outdoor,AU,Kate,3000,01MAR2018
+Sports,DK,Sandy,10000,01APR2018
+Sports,DK,Marple,770,01FEB2017
+Sports,DK,Jinny,1450,01MAY2019
+Outdoor,AU,Privet,1650,01AUG2020
+Sports,DK,Mishel,1500,01MAR2018
+Sasteria,ES,Annet,250,01OCT2017
+Trading,US,Julien,1345,01JUL2010
+;
+run;
+
+proc sql;
+  create table work.category_aggr as
+  (select Supplier_Category, mean(Salary) as Category_Mean
+  from work.suppliers
+  group by Supplier_Category);
+
+  create table work.country_aggr as
+  (select Supplier_Country, mean(Salary) as Country_Mean
+  from work.suppliers
+  group by Supplier_Country);
+
+  create table work.report_suppliers as
+  (select *
+  from
+      (
+        work.suppliers s
+      inner join
+        work.category_aggr caa
+      on s.Supplier_Category = caa.Supplier_Category
+      )
+    inner join
+      work.country_aggr coa
+    on s.Supplier_Country = coa.Supplier_Country
+  );
+
+  create table work.report_supp_actual as
+  (select rs.* 
+  from
+    (
+      (select Supplier_Category, max(Hier_Date) as Hier_Date_Max
+      from work.report_suppliers
+      group by Supplier_Category) max_hiers
+    inner join
+      work.report_suppliers rs
+    on max_hiers.Supplier_Category = rs.Supplier_Category
+    )
+  where rs.Hier_Date = max_hiers.Hier_Date_Max
+  );
+run;
+
+/*Task11*/
+
+data Customers;
+	length Customer_ID 8 
+			Name
+			Address $64;
+	Customer_ID=00001;
+	Name='ООО "Ромашка+"';
+	Address='None';
+	output;
+	Customer_ID=00004;
+	Name='ОАО "РЖД"';
+	Address='None';
+	output;
+	Customer_ID=00002;
+	Name='ЗАО "ИнтерСофт"';
+	Address='None';
+	output;
+	Customer_ID=00003;
+	Name='Umbrella Corp.';
+	Address='None';
+	output;
+	Customer_ID=00006;
+	Name='Waterfall Enterprise';
+	Address='None';
+	output;
+	Customer_ID=00005;
+	Name='ООО "Ромашка Плюс Плюс"';
+	Address='None';
+	output;
+run;
+
+data Tickets; 
+length Ticket_ID
+Customer_ID
+Status
+Open_DT
+Close_DT 8;
+format open_dt close_dt date9.;
+Ticket_ID=000001;
+Customer_ID=00001;
+Status=1;
+Open_DT='01jan2015'd;
+Close_DT=.;
+output;
+Ticket_ID=000002;
+Customer_ID=00001;
+Status=0;
+Open_DT='01jan2015'd;
+Close_DT='10jan2015'd;
+output;
+Ticket_ID=000003;
+Customer_ID=00004;
+Status=1;
+Open_DT='01jan2015'd;
+Close_DT=.;
+output;
+Ticket_ID=000004;
+Customer_ID=00001;
+Status=0;
+Open_DT='02jan2015'd;
+Close_DT='10jan2015'd;
+output;
+Ticket_ID=000005;
+Customer_ID=00002;
+Status=0;
+Open_DT='03jan2015'd;
+Close_DT='11jan2015'd;
+output;
+Ticket_ID=000006;
+Customer_ID=00002;
+Status=0;
+Open_DT='04jan2015'd;
+Close_DT='12jan2015'd;
+output;
+Ticket_ID=000007;
+Customer_ID=00002;
+Status=0;
+Open_DT='05jan2015'd;
+Close_DT=.;
+output;
+Ticket_ID=000008;
+Customer_ID=00003;
+Status=1;
+Open_DT='06jan2015'd;
+Close_DT=.;
+output;
+Ticket_ID=000009;
+Customer_ID=00003;
+Status=0;
+Open_DT='07jan2015'd;
+Close_DT='12jan2015'd;
+output;
+Ticket_ID=000010;
+Customer_ID=00003;
+Status=0;
+Open_DT='08jan2015'd;
+Close_DT='16jan2015'd;
+output;
+Ticket_ID=000011;
+Customer_ID=00001;
+Status=1;
+Open_DT='09jan2015'd;
+Close_DT=.;
+output;
+run;
+
+proc sql print;
+  select cust.Name
+  from
+  (
+    (select distinct Customer_ID
+    from work.tickets
+    where Status = 1) good_cust
+  inner join
+    work.customers cust
+  on good_cust.Customer_ID = cust.Customer_ID
+  );
+run;
+
+proc sql print;
+  select cust.Name
+  from
+  (
+    (select Customer_ID
+    from work.tickets
+    where Status = 0
+    group by Customer_ID
+    having count(Ticket_ID) > 2) bad_cust
+  inner join
+    work.customers cust
+  on bad_cust.Customer_ID = cust.Customer_ID
+  );
+run;
+
+/* ---------------- ЛОГ --------------- */
+
+1    %studio_hide_wrapper;
+82   libname orion '/var/data/mipt';
+NOTE: Libref ORION was successfully assigned as follows: 
+      Engine:        V9 
+      Physical Name: /var/data/mipt
+83   
+84   /*Task1*/
+85   
+86   data work.birthday(keep=Customer_Name Birth_Date Bday2012 BdayDOW2012 Age2012);
+87     set orion.customer;
+NOTE: Data file ORION.CUSTOMER.DATA is in a format that is native to another host, or the file encoding does not match the session 
+      encoding. Cross Environment Data Access will be used, which might require additional CPU resources and might reduce 
+      performance.
+88     format Bday2012 date9.;
+89     length BdayDOW2012 8;
+90     format Age2012 10.;
+91   
+92     Bday2012 = MDY(month(Birth_Date), day(Birth_Date), 2012);
+93     BdayDOW2012 = weekday(Bday2012);
+94     Age2012 = (Bday2012 - Birth_Date) / 365.25;
+95   run;
+NOTE: There were 77 observations read from the data set ORION.CUSTOMER.
+NOTE: The data set WORK.BIRTHDAY has 77 observations and 5 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.01 seconds
+      
+96   
+97   proc print data=work.birthday;
+98   run;
+NOTE: There were 77 observations read from the data set WORK.BIRTHDAY.
+NOTE: The PROCEDURE PRINT printed pages 44-45.
+NOTE: PROCEDURE PRINT used (Total process time):
+      real time           0.10 seconds
+      cpu time            0.11 seconds
+      
+99   
+100  /*Task2*/
+101  
+102  data work.season(keep=Customer_FirstName
+103                        Customer_LastName
+104                        Customer_BirthDate
+105                        Customer_Age
+106                        Promo
+107                        Promo2);
+108    set orion.customer_dim;
+NOTE: Data file ORION.CUSTOMER_DIM.DATA is in a format that is native to another host, or the file encoding does not match the 
+      session encoding. Cross Environment Data Access will be used, which might require additional CPU resources and might reduce 
+      performance.
+109    length Promo $32;
+110    length qtr_val 8;
+111    length Promo2 $32;
+112  
+113    qtr_val = qtr(Customer_BirthDate);
+114    if qtr_val = 1 then Promo = 'Winter';
+115    if qtr_val = 2 then Promo = 'Spring';
+116    if qtr_val = 3 then Promo = 'Summer';
+117    if qtr_val = 4 then Promo = 'Fall';
+118  
+119    if Customer_Age >= 18 and Customer_Age <= 25 then Promo2 = 'YA';
+120    else if Customer_Age > 65 then Promo2 = 'Senior';
+121    else Promo2 = '';
+122  run;
+NOTE: There were 77 observations read from the data set ORION.CUSTOMER_DIM.
+NOTE: The data set WORK.SEASON has 77 observations and 6 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.01 seconds
+      
+123  
+124  proc print data=work.season;
+125    var Customer_FirstName
+126        Customer_LastName
+127        Customer_BirthDate
+128        Promo
+129        Customer_Age
+130        Promo2;
+131  run;
+NOTE: There were 77 observations read from the data set WORK.SEASON.
+NOTE: The PROCEDURE PRINT printed pages 46-47.
+NOTE: PROCEDURE PRINT used (Total process time):
+      real time           0.12 seconds
+      cpu time            0.12 seconds
+      
+132  
+133  /*Task3*/
+134  
+135  data work.ordertype(drop=Order_Type Employee_ID Customer_ID);
+136    set orion.orders;
+NOTE: Data file ORION.ORDERS.DATA is in a format that is native to another host, or the file encoding does not match the session 
+      encoding. Cross Environment Data Access will be used, which might require additional CPU resources and might reduce 
+      performance.
+137    length DayOfWeek 8;
+138    DayOfWeek = weekday(Order_Date);
+139    length Type $20;
+140    if Order_Type = 1 then Type = 'Retail Sale';
+141    if Order_Type = 2 then Type = 'Catalog Sale';
+142    if Order_Type = 3 then Type = 'Internet Sale';
+143    length SaleAds $8;
+144    if Order_Type = 2 then SaleAds = 'Mail';
+145    if Order_Type = 3 then SaleAds = 'Email';
+146  run;
+NOTE: There were 490 observations read from the data set ORION.ORDERS.
+NOTE: The data set WORK.ORDERTYPE has 490 observations and 6 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.01 seconds
+      
+147  
+148  proc print data=work.ordertype;
+149    var Order_ID Order_Date Delivery_Date Type SaleAds DayOfWeek;
+150  run;
+NOTE: There were 490 observations read from the data set WORK.ORDERTYPE.
+NOTE: The PROCEDURE PRINT printed pages 48-57.
+NOTE: PROCEDURE PRINT used (Total process time):
+      real time           0.68 seconds
+      cpu time            0.68 seconds
+      
+151  
+152  /*Task4*/
+153  
+154  proc sql;
+155    create table work.cr_table
+156      (customer_id num length=8,
+157      customer_name char length=32,
+158      customer_job char length=64,
+159      regist_date num format=date9.);
+NOTE: Table WORK.CR_TABLE created, with 0 rows and 4 columns.
+160  run;
+NOTE: PROC SQL statements are executed immediately; The RUN statement has no effect.
+161  
+162  /*Task5*/
+163  
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+164  data work.source;
+165    length customer_id 8;
+166    length customer_name $32;
+167    length customer_job $64;
+168    format regist_date date9.;
+169  
+170    customer_id = 1;
+171    customer_name = 'Bob';
+172    customer_job = 'Student';
+173    regist_date = '25JAN1995'd;
+174    output;
+175    customer_id = 2;
+176    customer_name = 'James';
+177    customer_job = 'Director';
+178    regist_date = '17JUN1983'd;
+179    output;
+180  run;
+NOTE: The data set WORK.SOURCE has 2 observations and 4 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+181  
+182  /*Task6*/
+183  
+184  proc sql noprint;
+185    insert into work.cr_table
+186    select * from work.source;
+NOTE: 2 rows were inserted into WORK.CR_TABLE.
+187  
+188    insert into work.cr_table
+189    values (3, 'John', 'Programmer', '01JAN2001'd);
+NOTE: 1 row was inserted into WORK.CR_TABLE.
+190  run;
+NOTE: PROC SQL statements are executed immediately; The RUN statement has no effect.
+191  
+192  /*Task7*/
+193  
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+194  proc sql noprint;
+195    alter table work.cr_table
+196    modify customer_id num label='ID сотрудника';
+NOTE: Table WORK.CR_TABLE has been modified, with 4 columns.
+197    alter table work.cr_table
+198    modify customer_job char label='Профессия сотрудника';
+NOTE: Table WORK.CR_TABLE has been modified, with 4 columns.
+199  run;
+NOTE: PROC SQL statements are executed immediately; The RUN statement has no effect.
+200  
+201  /*Task8*/
+202  
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+203  proc sql;
+204    alter table work.cr_table
+205    add customer_age num length=8;
+NOTE: Table WORK.CR_TABLE has been modified, with 5 columns.
+206  
+207    update work.cr_table
+208    set customer_age=int((today() - regist_date) / 365.25);
+NOTE: 3 rows were updated in WORK.CR_TABLE.
+209  run;
+NOTE: PROC SQL statements are executed immediately; The RUN statement has no effect.
+210  
+211  /*Task9*/
+212  
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+213  proc sql;
+214    delete from work.cr_table
+215    where customer_age>25;
+NOTE: 2 rows were deleted from WORK.CR_TABLE.
+216  run;
+NOTE: PROC SQL statements are executed immediately; The RUN statement has no effect.
+217  
+218  /*Task10*/
+219  
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+220  data work.suppliers;
+221  infile datalines delimiter=',';
+222     input Supplier_Category $
+223  Supplier_Country $
+224  Supplier_Name $
+225  Salary :8.
+226  Hier_date :date9.
+227  ;
+228  datalines;
+NOTE: The data set WORK.SUPPLIERS has 13 observations and 5 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.01 seconds
+      
+242  ;
+243  run;
+244  
+245  proc sql;
+246    create table work.category_aggr as
+247    (select Supplier_Category, mean(Salary) as Category_Mean
+248    from work.suppliers
+249    group by Supplier_Category);
+NOTE: Table WORK.CATEGORY_AGGR created, with 4 rows and 2 columns.
+250  
+251    create table work.country_aggr as
+252    (select Supplier_Country, mean(Salary) as Country_Mean
+253    from work.suppliers
+254    group by Supplier_Country);
+NOTE: Table WORK.COUNTRY_AGGR created, with 4 rows and 2 columns.
+255  
+256    create table work.report_suppliers as
+257    (select *
+258    from
+259        (
+260          work.suppliers s
+261        inner join
+262          work.category_aggr caa
+263        on s.Supplier_Category = caa.Supplier_Category
+264        )
+265      inner join
+266        work.country_aggr coa
+267      on s.Supplier_Country = coa.Supplier_Country
+268    );
+WARNING: Variable Supplier_Category already exists on file WORK.REPORT_SUPPLIERS.
+WARNING: Variable Supplier_Country already exists on file WORK.REPORT_SUPPLIERS.
+NOTE: Table WORK.REPORT_SUPPLIERS created, with 13 rows and 7 columns.
+269  
+270    create table work.report_supp_actual as
+271    (select rs.*
+272    from
+273      (
+274        (select Supplier_Category, max(Hier_Date) as Hier_Date_Max
+275        from work.report_suppliers
+276        group by Supplier_Category) max_hiers
+277      inner join
+278        work.report_suppliers rs
+279      on max_hiers.Supplier_Category = rs.Supplier_Category
+280      )
+281    where rs.Hier_Date = max_hiers.Hier_Date_Max
+282    );
+NOTE: Table WORK.REPORT_SUPP_ACTUAL created, with 4 rows and 7 columns.
+283  run;
+NOTE: PROC SQL statements are executed immediately; The RUN statement has no effect.
+284  
+285  /*Task11*/
+286  
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.02 seconds
+      
+287  data Customers;
+288  length Customer_ID 8
+289  Name
+290  Address $64;
+291  Customer_ID=00001;
+292  Name='ООО "Ромашка+"';
+293  Address='None';
+294  output;
+295  Customer_ID=00004;
+296  Name='ОАО "РЖД"';
+297  Address='None';
+298  output;
+299  Customer_ID=00002;
+300  Name='ЗАО "ИнтерСофт"';
+301  Address='None';
+302  output;
+303  Customer_ID=00003;
+304  Name='Umbrella Corp.';
+305  Address='None';
+306  output;
+307  Customer_ID=00006;
+308  Name='Waterfall Enterprise';
+309  Address='None';
+310  output;
+311  Customer_ID=00005;
+312  Name='ООО "Ромашка Плюс Плюс"';
+313  Address='None';
+314  output;
+315  run;
+NOTE: The data set WORK.CUSTOMERS has 6 observations and 3 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+316  
+317  data Tickets;
+318  length Ticket_ID
+319  Customer_ID
+320  Status
+321  Open_DT
+322  Close_DT 8;
+323  format open_dt close_dt date9.;
+324  Ticket_ID=000001;
+325  Customer_ID=00001;
+326  Status=1;
+327  Open_DT='01jan2015'd;
+328  Close_DT=.;
+329  output;
+330  Ticket_ID=000002;
+331  Customer_ID=00001;
+332  Status=0;
+333  Open_DT='01jan2015'd;
+334  Close_DT='10jan2015'd;
+335  output;
+336  Ticket_ID=000003;
+337  Customer_ID=00004;
+338  Status=1;
+339  Open_DT='01jan2015'd;
+340  Close_DT=.;
+341  output;
+342  Ticket_ID=000004;
+343  Customer_ID=00001;
+344  Status=0;
+345  Open_DT='02jan2015'd;
+346  Close_DT='10jan2015'd;
+347  output;
+348  Ticket_ID=000005;
+349  Customer_ID=00002;
+350  Status=0;
+351  Open_DT='03jan2015'd;
+352  Close_DT='11jan2015'd;
+353  output;
+354  Ticket_ID=000006;
+355  Customer_ID=00002;
+356  Status=0;
+357  Open_DT='04jan2015'd;
+358  Close_DT='12jan2015'd;
+359  output;
+360  Ticket_ID=000007;
+361  Customer_ID=00002;
+362  Status=0;
+363  Open_DT='05jan2015'd;
+364  Close_DT=.;
+365  output;
+366  Ticket_ID=000008;
+367  Customer_ID=00003;
+368  Status=1;
+369  Open_DT='06jan2015'd;
+370  Close_DT=.;
+371  output;
+372  Ticket_ID=000009;
+373  Customer_ID=00003;
+374  Status=0;
+375  Open_DT='07jan2015'd;
+376  Close_DT='12jan2015'd;
+377  output;
+378  Ticket_ID=000010;
+379  Customer_ID=00003;
+380  Status=0;
+381  Open_DT='08jan2015'd;
+382  Close_DT='16jan2015'd;
+383  output;
+384  Ticket_ID=000011;
+385  Customer_ID=00001;
+386  Status=1;
+387  Open_DT='09jan2015'd;
+388  Close_DT=.;
+389  output;
+390  run;
+NOTE: The data set WORK.TICKETS has 11 observations and 5 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+391  
+392  proc sql print;
+393    select cust.Name
+394    from
+395    (
+396      (select distinct Customer_ID
+397      from work.tickets
+398      where Status = 1) good_cust
+399    inner join
+400      work.customers cust
+401    on good_cust.Customer_ID = cust.Customer_ID
+402    );
+403  run;
+NOTE: PROC SQL statements are executed immediately; The RUN statement has no effect.
+404  
+NOTE: The PROCEDURE SQL printed page 58.
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.02 seconds
+      
+405  proc sql print;
+406    select cust.Name
+407    from
+408    (
+409      (select Customer_ID
+410      from work.tickets
+411      where Status = 0
+412      group by Customer_ID
+413      having count(Ticket_ID) > 2) bad_cust
+414    inner join
+415      work.customers cust
+416    on bad_cust.Customer_ID = cust.Customer_ID
+417    );
+418  run;
+NOTE: PROC SQL statements are executed immediately; The RUN statement has no effect.
+419  
+420  
+421  
+422  %studio_hide_wrapper;
+433  
+434  

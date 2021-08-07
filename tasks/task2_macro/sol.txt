@@ -1,0 +1,2122 @@
+------------ КОД -------------
+
+
+options mprint mlogic symbolgen;
+%macro tech_import(mpObjectName=course_lifecycle,
+					mpObjectType=CSV,
+					mpOutputLibref = work
+					);
+	
+	%local lmvObjectName
+			lmvObjectType
+			lmvOutputLibref
+	;
+
+	%let lmvObjectName= &mpObjectName.;
+	%let lmvObjectType = %lowcase(&mpObjectType.);
+	%let lmvOutputLibref = &mpOutputLibref.;
+	
+	%let mvObjectsCount = %sysfunc(countw(&lmvObjectName., %str( )));
+
+	%do i=1 %to &mvObjectsCount.;
+		%let mvObjectSelected = %scan(&lmvObjectName., &i., %str( ));
+		%put &=mvObjectSelected;
+		proc import datafile="/var/data/mipt/&mvObjectSelected..&lmvObjectType."
+			DBMS=&lmvObjectType.
+			out=&lmvOutputLibref..&mvObjectSelected.
+			replace
+			;
+			getnames=yes;
+		run;
+	%end;
+
+%mend tech_import;
+
+%tech_import(mpObjectName=course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 course_movesale_part4,
+					mpObjectType=CSV,
+					mpOutputLibref = work
+					);
+
+%macro tasks();
+
+/* Task1 */
+
+proc sql noprint;
+  create table work.valid_structure_movesale 
+  (
+    Date_day numeric, 
+    LOCATION_ID numeric,
+    PRODUCT_ID numeric,
+    Sls_Retail_AD_Rub numeric, 
+    Sls_Retail_BD_Rub numeric,
+    Sls_Retail_Qty numeric, 
+    Small_Scale_Wholesales numeric, 
+    Small_Scale_Wholesales_AD_RUB numeric,
+    VERSION_ID numeric, 
+    location_id_char numeric,
+    product_id_char numeric,
+    return_ad_rub numeric,
+    return_qty numeric
+  )
+;
+quit;
+
+/* Task2 */
+
+proc sql noprint;
+  create table work.get_objects as
+  (select *
+  from sashelp.vtable
+  where libname="WORK" and memname contains "MOVESALE_");
+quit;
+
+
+
+/* Task3 */
+
+proc sql noprint;
+  select memname
+  into:mvTABLE_NAMES separated by " "
+  from work.get_objects;
+  
+  select libname 
+  into:mvLIB_NAMES separated by " "
+  from work.get_objects;
+quit;
+
+%put &mvTABLE_NAMES.;
+%put &mvLIB_NAMES.;
+
+/* Task4 */
+%let mvLIST_CNT = %sysfunc(countw(&mvTABLE_NAMES.));
+
+%put &mvLIST_CNT;
+
+/* Task5 */
+proc contents noprint data=work.valid_structure_movesale
+              out=work.valid_cont;
+
+proc sql;
+  create table work.movesale_valid
+  like work.valid_structure_movesale;
+quit;
+
+/* Task6 */
+%local lmvTABLE_NAME
+       lmvLIB_NAME
+;
+
+%do i=1 %to &mvLIST_CNT.;
+  %let lmvTABLE_NAME = %scan(&mvTABLE_NAMES., &i., %str( ));
+  %let lmvLIB_NAME = %scan(&mvLIB_NAMES., &i., %str( ));
+  proc contents noprint data=&lmvLIB_NAME..&lmvTABLE_NAME.
+                        out=invalid_cont;
+  proc sql;
+    create table work.CHECK_FOR_NEW_COLUMNS AS
+    (
+      select T1.name, 
+             COALESCE(T2.name, 'INVALID COLUMN') AS CLMN_FLAG, 
+             T2.length, 
+             T2.type
+      from
+      (
+        valid_cont T1
+      left join
+        invalid_cont T2
+      on T1.name = T2.name
+      )
+    );
+  quit;
+
+  proc sql;
+    create table work.T_WITH_VALID_FLG as
+    (
+       select T1.NAME,
+              T1.CLMN_FLAG, 
+              COALESCE(T2.NAME, 'INVALID FORMAT') AS ERR_DESC
+       from
+       (
+          (select *
+          from work.CHECK_FOR_NEW_COLUMNS
+          where clmn_flag <> "INVALID COLUMN") as T1
+        left join
+          valid_cont as T2
+        on T1.name = T2.name and T1.length = T2.length and T1.type = T2.type
+       )
+    );
+  quit;
+
+  proc sql noprint;
+    create table work.ONLY_VALID_DATA as
+    (
+       select * 
+       from work.T_WITH_VALID_FLG
+       where err_desc <> "INVALID FORMAT"
+    );
+  quit;
+
+  proc sql noprint;
+    select count(name)
+    into:lmvFiltered_Cnt
+    from work.ONLY_VALID_DATA;
+    
+    select count(name)
+    into:lmvValid_Cnt
+    from valid_cont;
+  quit;
+
+  %if &lmvFiltered_Cnt. = &lmvValid_Cnt. %then
+  %do;
+    proc append
+      BASE = work.movesale_valid
+      DATA = &lmvLIB_NAME..&lmvTABLE_NAME.;
+    run;    
+  %end;  
+
+%end;
+
+%mend tasks;
+
+%tasks();
+
+---------------------------------------------
+
+------------ ЛОГ -------------
+
+%studio_hide_wrapper;
+82   
+83   options mprint mlogic symbolgen;
+84   %macro tech_import(mpObjectName=course_lifecycle,
+85   mpObjectType=CSV,
+86   mpOutputLibref = work
+87   );
+88   
+89   %local lmvObjectName
+90   lmvObjectType
+91   lmvOutputLibref
+92   ;
+93   
+94   %let lmvObjectName= &mpObjectName.;
+95   %let lmvObjectType = %lowcase(&mpObjectType.);
+96   %let lmvOutputLibref = &mpOutputLibref.;
+97   
+98   %let mvObjectsCount = %sysfunc(countw(&lmvObjectName., %str( )));
+99   
+100  %do i=1 %to &mvObjectsCount.;
+101  %let mvObjectSelected = %scan(&lmvObjectName., &i., %str( ));
+102  %put &=mvObjectSelected;
+103  proc import datafile="/var/data/mipt/&mvObjectSelected..&lmvObjectType."
+104  DBMS=&lmvObjectType.
+105  out=&lmvOutputLibref..&mvObjectSelected.
+106  replace
+107  ;
+108  getnames=yes;
+109  run;
+110  %end;
+111  
+112  %mend tech_import;
+113  
+114  %tech_import(mpObjectName=course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date course_sku
+114! course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 course_movesale_part4,
+MLOGIC(TECH_IMPORT):  Beginning execution.
+115  mpObjectType=CSV,
+116  mpOutputLibref = work
+117  );
+MLOGIC(TECH_IMPORT):  Parameter MPOBJECTNAME has value course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+      course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+      course_movesale_part4
+MLOGIC(TECH_IMPORT):  Parameter MPOBJECTTYPE has value CSV
+MLOGIC(TECH_IMPORT):  Parameter MPOUTPUTLIBREF has value work
+MLOGIC(TECH_IMPORT):  %LOCAL  LMVOBJECTNAME    LMVOBJECTTYPE    LMVOUTPUTLIBREF  
+MLOGIC(TECH_IMPORT):  %LET (variable name is LMVOBJECTNAME)
+SYMBOLGEN:  Macro variable MPOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+MLOGIC(TECH_IMPORT):  %LET (variable name is LMVOBJECTTYPE)
+MLOGIC(TECH_IMPORT):  Beginning compilation of LOWCASE using the autocall file 
+      /opt/sas/spre/home/SASFoundation/sasautos/lowcase.sas.
+MLOGIC(TECH_IMPORT):  Ending compilation of LOWCASE.
+MLOGIC(LOWCASE):  Beginning execution.
+MLOGIC(LOWCASE):  This macro was compiled from the autocall file /opt/sas/spre/home/SASFoundation/sasautos/lowcase.sas
+SYMBOLGEN:  Macro variable MPOBJECTTYPE resolves to CSV
+MLOGIC(LOWCASE):  Parameter STRING has value CSV
+SYMBOLGEN:  Macro variable STRING resolves to CSV
+MLOGIC(LOWCASE):  Ending execution.
+MLOGIC(TECH_IMPORT):  %LET (variable name is LMVOUTPUTLIBREF)
+SYMBOLGEN:  Macro variable MPOUTPUTLIBREF resolves to work
+MLOGIC(TECH_IMPORT):  %LET (variable name is MVOBJECTSCOUNT)
+SYMBOLGEN:  Macro variable LMVOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+SYMBOLGEN:  Macro variable MVOBJECTSCOUNT resolves to 12
+MLOGIC(TECH_IMPORT):  %DO loop beginning; index variable I; start value is 1; stop value is 12; by value is 1.  
+MLOGIC(TECH_IMPORT):  %LET (variable name is MVOBJECTSELECTED)
+SYMBOLGEN:  Macro variable LMVOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+SYMBOLGEN:  Macro variable I resolves to 1
+MLOGIC(TECH_IMPORT):  %PUT &=mvObjectSelected
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_tt
+MVOBJECTSELECTED=course_tt
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_tt
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOUTPUTLIBREF resolves to work
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_tt
+MPRINT(TECH_IMPORT):   proc import datafile="/var/data/mipt/course_tt.csv" DBMS=csv out=work.course_tt replace ;
+MPRINT(TECH_IMPORT):   ADLM;
+MPRINT(TECH_IMPORT):   getnames=yes;
+MPRINT(TECH_IMPORT):   run;
+NOTE: Unable to open parameter catalog: SASUSER.PARMS.PARMS.SLIST in update mode. Temporary parameter values will be saved to 
+WORK.PARMS.PARMS.SLIST.
+118   /**********************************************************************
+119   *   PRODUCT:   SAS
+120   *   VERSION:   V.03.05
+121   *   CREATOR:   External File Interface
+122   *   DATE:      18APR21
+123   *   DESC:      Generated SAS Datastep Code
+124   *   TEMPLATE SOURCE:  (None Specified.)
+125   ***********************************************************************/
+126      data WORK.COURSE_TT    ;
+MPRINT(TECH_IMPORT):   data WORK.COURSE_TT ;
+127      %let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+128      infile '/var/data/mipt/course_tt.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+MPRINT(TECH_IMPORT):   infile '/var/data/mipt/course_tt.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+129         informat LOCATION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_ID best32. ;
+130         informat location_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat location_id_char best32. ;
+131         informat LOCATION_NM $16. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_NM $16. ;
+132         informat LOCATION_LVL_NM1 $23. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_LVL_NM1 $23. ;
+133         informat LOCATION_LVL_NM2 $29. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_LVL_NM2 $29. ;
+134         informat LocationKind $31. ;
+MPRINT(TECH_IMPORT):   informat LocationKind $31. ;
+135         informat District $22. ;
+MPRINT(TECH_IMPORT):   informat District $22. ;
+136         informat ActivityKind $14. ;
+MPRINT(TECH_IMPORT):   informat ActivityKind $14. ;
+137         informat Network $18. ;
+MPRINT(TECH_IMPORT):   informat Network $18. ;
+138         informat Fact_open_date DATE9. ;
+MPRINT(TECH_IMPORT):   informat Fact_open_date DATE9. ;
+139         informat Fact_close_date DATE9. ;
+MPRINT(TECH_IMPORT):   informat Fact_close_date DATE9. ;
+140         informat Plan_open_date DATE9. ;
+MPRINT(TECH_IMPORT):   informat Plan_open_date DATE9. ;
+141         informat Plan_close_date DATE9. ;
+MPRINT(TECH_IMPORT):   informat Plan_close_date DATE9. ;
+142         informat Channel $16. ;
+MPRINT(TECH_IMPORT):   informat Channel $16. ;
+143         format LOCATION_ID best12. ;
+MPRINT(TECH_IMPORT):   format LOCATION_ID best12. ;
+144         format location_id_char best12. ;
+MPRINT(TECH_IMPORT):   format location_id_char best12. ;
+145         format LOCATION_NM $16. ;
+MPRINT(TECH_IMPORT):   format LOCATION_NM $16. ;
+146         format LOCATION_LVL_NM1 $23. ;
+MPRINT(TECH_IMPORT):   format LOCATION_LVL_NM1 $23. ;
+147         format LOCATION_LVL_NM2 $29. ;
+MPRINT(TECH_IMPORT):   format LOCATION_LVL_NM2 $29. ;
+148         format LocationKind $31. ;
+MPRINT(TECH_IMPORT):   format LocationKind $31. ;
+149         format District $22. ;
+MPRINT(TECH_IMPORT):   format District $22. ;
+150         format ActivityKind $14. ;
+MPRINT(TECH_IMPORT):   format ActivityKind $14. ;
+151         format Network $18. ;
+MPRINT(TECH_IMPORT):   format Network $18. ;
+152         format Fact_open_date DATE9. ;
+MPRINT(TECH_IMPORT):   format Fact_open_date DATE9. ;
+153         format Fact_close_date DATE9. ;
+MPRINT(TECH_IMPORT):   format Fact_close_date DATE9. ;
+154         format Plan_open_date DATE9. ;
+MPRINT(TECH_IMPORT):   format Plan_open_date DATE9. ;
+155         format Plan_close_date DATE9. ;
+MPRINT(TECH_IMPORT):   format Plan_close_date DATE9. ;
+156         format Channel $16. ;
+MPRINT(TECH_IMPORT):   format Channel $16. ;
+157      input
+158                  LOCATION_ID
+159                  location_id_char
+160                  LOCATION_NM  $
+161                  LOCATION_LVL_NM1  $
+162                  LOCATION_LVL_NM2  $
+163                  LocationKind  $
+164                  District  $
+165                  ActivityKind  $
+166                  Network  $
+167                  Fact_open_date
+168                  Fact_close_date
+169                  Plan_open_date
+170                  Plan_close_date
+171                  Channel  $
+172      ;
+MPRINT(TECH_IMPORT):   input LOCATION_ID location_id_char LOCATION_NM $ LOCATION_LVL_NM1 $ LOCATION_LVL_NM2 $ LocationKind $ 
+District $ ActivityKind $ Network $ Fact_open_date Fact_close_date Plan_open_date Plan_close_date Channel $ ;
+173      if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+MPRINT(TECH_IMPORT):   if _ERROR_ then call symputx('_EFIERR_',1);
+174      run;
+MPRINT(TECH_IMPORT):   run;
+NOTE: The infile '/var/data/mipt/course_tt.csv' is:
+      Filename=/var/data/mipt/course_tt.csv,
+      Owner Name=miptnib,Group Name=miptnib,
+      Access Permission=-rw-rw-rw-,
+      Last Modified=22 августа 2019 г. 18:54:17,
+      File Size (bytes)=1046
+NOTE: 4 records were read from the infile '/var/data/mipt/course_tt.csv'.
+      The minimum record length was 201.
+      The maximum record length was 226.
+NOTE: The data set WORK.COURSE_TT has 4 observations and 14 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.11 seconds
+      cpu time            0.03 seconds
+      
+4 rows created in WORK.COURSE_TT from /var/data/mipt/course_tt.csv.
+  
+  
+  
+NOTE: WORK.COURSE_TT data set was successfully created.
+NOTE: The data set WORK.COURSE_TT has 4 observations and 14 variables.
+NOTE: PROCEDURE IMPORT used (Total process time):
+      real time           0.92 seconds
+      cpu time            0.36 seconds
+      
+MPRINT(TECH_IMPORT):    ;
+MLOGIC(TECH_IMPORT):  %DO loop index variable I is now 2; loop will iterate again.
+MLOGIC(TECH_IMPORT):  %LET (variable name is MVOBJECTSELECTED)
+SYMBOLGEN:  Macro variable LMVOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+SYMBOLGEN:  Macro variable I resolves to 2
+MLOGIC(TECH_IMPORT):  %PUT &=mvObjectSelected
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_tt_sku
+MVOBJECTSELECTED=course_tt_sku
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_tt_sku
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOUTPUTLIBREF resolves to work
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_tt_sku
+MPRINT(TECH_IMPORT):   proc import datafile="/var/data/mipt/course_tt_sku.csv" DBMS=csv out=work.course_tt_sku replace ;
+MPRINT(TECH_IMPORT):   ADLM;
+MPRINT(TECH_IMPORT):   getnames=yes;
+MPRINT(TECH_IMPORT):   run;
+NOTE: Unable to open parameter catalog: SASUSER.PARMS.PARMS.SLIST in update mode. Temporary parameter values will be saved to 
+WORK.PARMS.PARMS.SLIST.
+175   /**********************************************************************
+176   *   PRODUCT:   SAS
+177   *   VERSION:   V.03.05
+178   *   CREATOR:   External File Interface
+179   *   DATE:      18APR21
+180   *   DESC:      Generated SAS Datastep Code
+181   *   TEMPLATE SOURCE:  (None Specified.)
+182   ***********************************************************************/
+183      data WORK.COURSE_TT_SKU    ;
+MPRINT(TECH_IMPORT):   data WORK.COURSE_TT_SKU ;
+184      %let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+185      infile '/var/data/mipt/course_tt_sku.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+MPRINT(TECH_IMPORT):   infile '/var/data/mipt/course_tt_sku.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+186         informat PRODUCT_ID best32. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_ID best32. ;
+187         informat STORE_LOCATION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat STORE_LOCATION_ID best32. ;
+188         informat PRODUCT_ID_NEW best32. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_ID_NEW best32. ;
+189         informat LOCATION_ID_NEW best32. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_ID_NEW best32. ;
+190         informat product_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat product_id_char best32. ;
+191         informat location_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat location_id_char best32. ;
+192         format PRODUCT_ID best12. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_ID best12. ;
+193         format STORE_LOCATION_ID best12. ;
+MPRINT(TECH_IMPORT):   format STORE_LOCATION_ID best12. ;
+194         format PRODUCT_ID_NEW best12. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_ID_NEW best12. ;
+195         format LOCATION_ID_NEW best12. ;
+MPRINT(TECH_IMPORT):   format LOCATION_ID_NEW best12. ;
+196         format product_id_char best12. ;
+MPRINT(TECH_IMPORT):   format product_id_char best12. ;
+197         format location_id_char best12. ;
+MPRINT(TECH_IMPORT):   format location_id_char best12. ;
+198      input
+199                  PRODUCT_ID
+200                  STORE_LOCATION_ID
+201                  PRODUCT_ID_NEW
+202                  LOCATION_ID_NEW
+203                  product_id_char
+204                  location_id_char
+205      ;
+MPRINT(TECH_IMPORT):   input PRODUCT_ID STORE_LOCATION_ID PRODUCT_ID_NEW LOCATION_ID_NEW product_id_char location_id_char ;
+206      if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+MPRINT(TECH_IMPORT):   if _ERROR_ then call symputx('_EFIERR_',1);
+207      run;
+MPRINT(TECH_IMPORT):   run;
+NOTE: The infile '/var/data/mipt/course_tt_sku.csv' is:
+      Filename=/var/data/mipt/course_tt_sku.csv,
+      Owner Name=miptnib,Group Name=miptnib,
+      Access Permission=-rw-rw-rw-,
+      Last Modified=22 августа 2019 г. 18:54:28,
+      File Size (bytes)=9216
+NOTE: 152 records were read from the infile '/var/data/mipt/course_tt_sku.csv'.
+      The minimum record length was 59.
+      The maximum record length was 59.
+NOTE: The data set WORK.COURSE_TT_SKU has 152 observations and 6 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.07 seconds
+      cpu time            0.01 seconds
+      
+152 rows created in WORK.COURSE_TT_SKU from /var/data/mipt/course_tt_sku.csv.
+  
+  
+  
+NOTE: WORK.COURSE_TT_SKU data set was successfully created.
+NOTE: The data set WORK.COURSE_TT_SKU has 152 observations and 6 variables.
+NOTE: PROCEDURE IMPORT used (Total process time):
+      real time           0.66 seconds
+      cpu time            0.27 seconds
+      
+MPRINT(TECH_IMPORT):    ;
+MLOGIC(TECH_IMPORT):  %DO loop index variable I is now 3; loop will iterate again.
+MLOGIC(TECH_IMPORT):  %LET (variable name is MVOBJECTSELECTED)
+SYMBOLGEN:  Macro variable LMVOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+SYMBOLGEN:  Macro variable I resolves to 3
+MLOGIC(TECH_IMPORT):  %PUT &=mvObjectSelected
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_promo
+MVOBJECTSELECTED=course_promo
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_promo
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOUTPUTLIBREF resolves to work
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_promo
+MPRINT(TECH_IMPORT):   proc import datafile="/var/data/mipt/course_promo.csv" DBMS=csv out=work.course_promo replace ;
+MPRINT(TECH_IMPORT):   ADLM;
+MPRINT(TECH_IMPORT):   getnames=yes;
+MPRINT(TECH_IMPORT):   run;
+NOTE: Unable to open parameter catalog: SASUSER.PARMS.PARMS.SLIST in update mode. Temporary parameter values will be saved to 
+WORK.PARMS.PARMS.SLIST.
+208   /**********************************************************************
+209   *   PRODUCT:   SAS
+210   *   VERSION:   V.03.05
+211   *   CREATOR:   External File Interface
+212   *   DATE:      18APR21
+213   *   DESC:      Generated SAS Datastep Code
+214   *   TEMPLATE SOURCE:  (None Specified.)
+215   ***********************************************************************/
+216      data WORK.COURSE_PROMO    ;
+MPRINT(TECH_IMPORT):   data WORK.COURSE_PROMO ;
+217      %let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+218      infile '/var/data/mipt/course_promo.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+MPRINT(TECH_IMPORT):   infile '/var/data/mipt/course_promo.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+219         informat PRODUCT_ID best32. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_ID best32. ;
+220         informat LOCATION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_ID best32. ;
+221         informat DatStart DATE9. ;
+MPRINT(TECH_IMPORT):   informat DatStart DATE9. ;
+222         informat DatEnd DATE9. ;
+MPRINT(TECH_IMPORT):   informat DatEnd DATE9. ;
+223         informat GROUP best32. ;
+MPRINT(TECH_IMPORT):   informat GROUP best32. ;
+224         informat product_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat product_id_char best32. ;
+225         informat location_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat location_id_char best32. ;
+226         format PRODUCT_ID best12. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_ID best12. ;
+227         format LOCATION_ID best12. ;
+MPRINT(TECH_IMPORT):   format LOCATION_ID best12. ;
+228         format DatStart DATE9. ;
+MPRINT(TECH_IMPORT):   format DatStart DATE9. ;
+229         format DatEnd DATE9. ;
+MPRINT(TECH_IMPORT):   format DatEnd DATE9. ;
+230         format GROUP best12. ;
+MPRINT(TECH_IMPORT):   format GROUP best12. ;
+231         format product_id_char best12. ;
+MPRINT(TECH_IMPORT):   format product_id_char best12. ;
+232         format location_id_char best12. ;
+MPRINT(TECH_IMPORT):   format location_id_char best12. ;
+233      input
+234                  PRODUCT_ID
+235                  LOCATION_ID
+236                  DatStart
+237                  DatEnd
+238                  GROUP
+239                  product_id_char
+240                  location_id_char
+241      ;
+MPRINT(TECH_IMPORT):   input PRODUCT_ID LOCATION_ID DatStart DatEnd GROUP product_id_char location_id_char ;
+242      if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+MPRINT(TECH_IMPORT):   if _ERROR_ then call symputx('_EFIERR_',1);
+243      run;
+MPRINT(TECH_IMPORT):   run;
+NOTE: The infile '/var/data/mipt/course_promo.csv' is:
+      Filename=/var/data/mipt/course_promo.csv,
+      Owner Name=miptnib,Group Name=miptnib,
+      Access Permission=-rw-rw-rw-,
+      Last Modified=22 августа 2019 г. 18:55:34,
+      File Size (bytes)=11681
+NOTE: 200 records were read from the infile '/var/data/mipt/course_promo.csv'.
+      The minimum record length was 57.
+      The maximum record length was 57.
+NOTE: The data set WORK.COURSE_PROMO has 200 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.05 seconds
+      cpu time            0.03 seconds
+      
+200 rows created in WORK.COURSE_PROMO from /var/data/mipt/course_promo.csv.
+  
+  
+  
+NOTE: WORK.COURSE_PROMO data set was successfully created.
+NOTE: The data set WORK.COURSE_PROMO has 200 observations and 7 variables.
+NOTE: PROCEDURE IMPORT used (Total process time):
+      real time           0.80 seconds
+      cpu time            0.29 seconds
+      
+MPRINT(TECH_IMPORT):    ;
+MLOGIC(TECH_IMPORT):  %DO loop index variable I is now 4; loop will iterate again.
+MLOGIC(TECH_IMPORT):  %LET (variable name is MVOBJECTSELECTED)
+SYMBOLGEN:  Macro variable LMVOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+SYMBOLGEN:  Macro variable I resolves to 4
+MLOGIC(TECH_IMPORT):  %PUT &=mvObjectSelected
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_sales_inv
+MVOBJECTSELECTED=course_sales_inv
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_sales_inv
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOUTPUTLIBREF resolves to work
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_sales_inv
+MPRINT(TECH_IMPORT):   proc import datafile="/var/data/mipt/course_sales_inv.csv" DBMS=csv out=work.course_sales_inv replace ;
+MPRINT(TECH_IMPORT):   ADLM;
+MPRINT(TECH_IMPORT):   getnames=yes;
+MPRINT(TECH_IMPORT):   run;
+NOTE: Unable to open parameter catalog: SASUSER.PARMS.PARMS.SLIST in update mode. Temporary parameter values will be saved to 
+WORK.PARMS.PARMS.SLIST.
+244   /**********************************************************************
+245   *   PRODUCT:   SAS
+246   *   VERSION:   V.03.05
+247   *   CREATOR:   External File Interface
+248   *   DATE:      18APR21
+249   *   DESC:      Generated SAS Datastep Code
+250   *   TEMPLATE SOURCE:  (None Specified.)
+251   ***********************************************************************/
+252      data WORK.COURSE_SALES_INV    ;
+MPRINT(TECH_IMPORT):   data WORK.COURSE_SALES_INV ;
+253      %let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+254      infile '/var/data/mipt/course_sales_inv.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+MPRINT(TECH_IMPORT):   infile '/var/data/mipt/course_sales_inv.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+255         informat PRODUCT_ID best32. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_ID best32. ;
+256         informat LOCATION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_ID best32. ;
+257         informat Date DATE9. ;
+MPRINT(TECH_IMPORT):   informat Date DATE9. ;
+258         informat Sls_Retail_Qty best32. ;
+MPRINT(TECH_IMPORT):   informat Sls_Retail_Qty best32. ;
+259         informat PRICE_REG best32. ;
+MPRINT(TECH_IMPORT):   informat PRICE_REG best32. ;
+260         informat FACT_PRICE best32. ;
+MPRINT(TECH_IMPORT):   informat FACT_PRICE best32. ;
+261         informat STOCK_QTY best32. ;
+MPRINT(TECH_IMPORT):   informat STOCK_QTY best32. ;
+262         format PRODUCT_ID best12. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_ID best12. ;
+263         format LOCATION_ID best12. ;
+MPRINT(TECH_IMPORT):   format LOCATION_ID best12. ;
+264         format Date DATE9. ;
+MPRINT(TECH_IMPORT):   format Date DATE9. ;
+265         format Sls_Retail_Qty best12. ;
+MPRINT(TECH_IMPORT):   format Sls_Retail_Qty best12. ;
+266         format PRICE_REG best12. ;
+MPRINT(TECH_IMPORT):   format PRICE_REG best12. ;
+267         format FACT_PRICE best12. ;
+MPRINT(TECH_IMPORT):   format FACT_PRICE best12. ;
+268         format STOCK_QTY best12. ;
+MPRINT(TECH_IMPORT):   format STOCK_QTY best12. ;
+269      input
+270                  PRODUCT_ID
+271                  LOCATION_ID
+272                  Date
+273                  Sls_Retail_Qty
+274                  PRICE_REG
+275                  FACT_PRICE
+276                  STOCK_QTY
+277      ;
+MPRINT(TECH_IMPORT):   input PRODUCT_ID LOCATION_ID Date Sls_Retail_Qty PRICE_REG FACT_PRICE STOCK_QTY ;
+278      if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+MPRINT(TECH_IMPORT):   if _ERROR_ then call symputx('_EFIERR_',1);
+279      run;
+MPRINT(TECH_IMPORT):   run;
+NOTE: The infile '/var/data/mipt/course_sales_inv.csv' is:
+      Filename=/var/data/mipt/course_sales_inv.csv,
+      Owner Name=miptnib,Group Name=miptnib,
+      Access Permission=-rw-rw-rw-,
+      Last Modified=22 августа 2019 г. 18:55:52,
+      File Size (bytes)=1063940
+NOTE: 27963 records were read from the infile '/var/data/mipt/course_sales_inv.csv'.
+      The minimum record length was 29.
+      The maximum record length was 47.
+NOTE: The data set WORK.COURSE_SALES_INV has 27963 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.27 seconds
+      cpu time            0.09 seconds
+      
+27963 rows created in WORK.COURSE_SALES_INV from /var/data/mipt/course_sales_inv.csv.
+  
+  
+  
+NOTE: WORK.COURSE_SALES_INV data set was successfully created.
+NOTE: The data set WORK.COURSE_SALES_INV has 27963 observations and 7 variables.
+NOTE: PROCEDURE IMPORT used (Total process time):
+      real time           1.03 seconds
+      cpu time            0.41 seconds
+      
+MPRINT(TECH_IMPORT):    ;
+MLOGIC(TECH_IMPORT):  %DO loop index variable I is now 5; loop will iterate again.
+MLOGIC(TECH_IMPORT):  %LET (variable name is MVOBJECTSELECTED)
+SYMBOLGEN:  Macro variable LMVOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+SYMBOLGEN:  Macro variable I resolves to 5
+MLOGIC(TECH_IMPORT):  %PUT &=mvObjectSelected
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_sum_sls_tt_date
+MVOBJECTSELECTED=course_sum_sls_tt_date
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_sum_sls_tt_date
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOUTPUTLIBREF resolves to work
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_sum_sls_tt_date
+MPRINT(TECH_IMPORT):   proc import datafile="/var/data/mipt/course_sum_sls_tt_date.csv" DBMS=csv out=work.course_sum_sls_tt_date 
+replace ;
+MPRINT(TECH_IMPORT):   ADLM;
+MPRINT(TECH_IMPORT):   getnames=yes;
+MPRINT(TECH_IMPORT):   run;
+NOTE: Unable to open parameter catalog: SASUSER.PARMS.PARMS.SLIST in update mode. Temporary parameter values will be saved to 
+WORK.PARMS.PARMS.SLIST.
+280   /**********************************************************************
+281   *   PRODUCT:   SAS
+282   *   VERSION:   V.03.05
+283   *   CREATOR:   External File Interface
+284   *   DATE:      18APR21
+285   *   DESC:      Generated SAS Datastep Code
+286   *   TEMPLATE SOURCE:  (None Specified.)
+287   ***********************************************************************/
+288      data WORK.COURSE_SUM_SLS_TT_DATE    ;
+MPRINT(TECH_IMPORT):   data WORK.COURSE_SUM_SLS_TT_DATE ;
+289      %let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+290      infile '/var/data/mipt/course_sum_sls_tt_date.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+MPRINT(TECH_IMPORT):   infile '/var/data/mipt/course_sum_sls_tt_date.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+291         informat LOCATION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_ID best32. ;
+292         informat Date DATE9. ;
+MPRINT(TECH_IMPORT):   informat Date DATE9. ;
+293         informat SUM_Sls_Retail_Qty best32. ;
+MPRINT(TECH_IMPORT):   informat SUM_Sls_Retail_Qty best32. ;
+294         format LOCATION_ID best12. ;
+MPRINT(TECH_IMPORT):   format LOCATION_ID best12. ;
+295         format Date DATE9. ;
+MPRINT(TECH_IMPORT):   format Date DATE9. ;
+296         format SUM_Sls_Retail_Qty best12. ;
+MPRINT(TECH_IMPORT):   format SUM_Sls_Retail_Qty best12. ;
+297      input
+298                  LOCATION_ID
+299                  Date
+300                  SUM_Sls_Retail_Qty
+301      ;
+MPRINT(TECH_IMPORT):   input LOCATION_ID Date SUM_Sls_Retail_Qty ;
+302      if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+MPRINT(TECH_IMPORT):   if _ERROR_ then call symputx('_EFIERR_',1);
+303      run;
+MPRINT(TECH_IMPORT):   run;
+NOTE: The infile '/var/data/mipt/course_sum_sls_tt_date.csv' is:
+      Filename=/var/data/mipt/course_sum_sls_tt_date.csv,
+      Owner Name=miptnib,Group Name=miptnib,
+      Access Permission=-rw-rw-rw-,
+      Last Modified=22 августа 2019 г. 18:56:10,
+      File Size (bytes)=10578
+NOTE: 546 records were read from the infile '/var/data/mipt/course_sum_sls_tt_date.csv'.
+      The minimum record length was 18.
+      The maximum record length was 19.
+NOTE: The data set WORK.COURSE_SUM_SLS_TT_DATE has 546 observations and 3 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.02 seconds
+      
+546 rows created in WORK.COURSE_SUM_SLS_TT_DATE from /var/data/mipt/course_sum_sls_tt_date.csv.
+  
+  
+  
+NOTE: WORK.COURSE_SUM_SLS_TT_DATE data set was successfully created.
+NOTE: The data set WORK.COURSE_SUM_SLS_TT_DATE has 546 observations and 3 variables.
+NOTE: PROCEDURE IMPORT used (Total process time):
+      real time           0.61 seconds
+      cpu time            0.26 seconds
+      
+MPRINT(TECH_IMPORT):    ;
+MLOGIC(TECH_IMPORT):  %DO loop index variable I is now 6; loop will iterate again.
+MLOGIC(TECH_IMPORT):  %LET (variable name is MVOBJECTSELECTED)
+SYMBOLGEN:  Macro variable LMVOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+SYMBOLGEN:  Macro variable I resolves to 6
+MLOGIC(TECH_IMPORT):  %PUT &=mvObjectSelected
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_sku
+MVOBJECTSELECTED=course_sku
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_sku
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOUTPUTLIBREF resolves to work
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_sku
+MPRINT(TECH_IMPORT):   proc import datafile="/var/data/mipt/course_sku.csv" DBMS=csv out=work.course_sku replace ;
+MPRINT(TECH_IMPORT):   ADLM;
+MPRINT(TECH_IMPORT):   getnames=yes;
+MPRINT(TECH_IMPORT):   run;
+NOTE: Unable to open parameter catalog: SASUSER.PARMS.PARMS.SLIST in update mode. Temporary parameter values will be saved to 
+WORK.PARMS.PARMS.SLIST.
+304   /**********************************************************************
+305   *   PRODUCT:   SAS
+306   *   VERSION:   V.03.05
+307   *   CREATOR:   External File Interface
+308   *   DATE:      18APR21
+309   *   DESC:      Generated SAS Datastep Code
+310   *   TEMPLATE SOURCE:  (None Specified.)
+311   ***********************************************************************/
+312      data WORK.COURSE_SKU    ;
+MPRINT(TECH_IMPORT):   data WORK.COURSE_SKU ;
+313      %let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+314      infile '/var/data/mipt/course_sku.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+MPRINT(TECH_IMPORT):   infile '/var/data/mipt/course_sku.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+315         informat PRODUCT_ID best32. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_ID best32. ;
+316         informat product_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat product_id_char best32. ;
+317         informat PRODUCT_NM $133. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_NM $133. ;
+318         informat PRODUCT_LVL2 $31. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_LVL2 $31. ;
+319         informat PRODUCT_LVL3 $35. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_LVL3 $35. ;
+320         informat Line $24. ;
+MPRINT(TECH_IMPORT):   informat Line $24. ;
+321         informat Collection $37. ;
+MPRINT(TECH_IMPORT):   informat Collection $37. ;
+322         informat Category $65. ;
+MPRINT(TECH_IMPORT):   informat Category $65. ;
+323         informat ProductCost best32. ;
+MPRINT(TECH_IMPORT):   informat ProductCost best32. ;
+324         informat VendorRetail best32. ;
+MPRINT(TECH_IMPORT):   informat VendorRetail best32. ;
+325         format PRODUCT_ID best12. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_ID best12. ;
+326         format product_id_char best12. ;
+MPRINT(TECH_IMPORT):   format product_id_char best12. ;
+327         format PRODUCT_NM $133. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_NM $133. ;
+328         format PRODUCT_LVL2 $31. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_LVL2 $31. ;
+329         format PRODUCT_LVL3 $35. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_LVL3 $35. ;
+330         format Line $24. ;
+MPRINT(TECH_IMPORT):   format Line $24. ;
+331         format Collection $37. ;
+MPRINT(TECH_IMPORT):   format Collection $37. ;
+332         format Category $65. ;
+MPRINT(TECH_IMPORT):   format Category $65. ;
+333         format ProductCost best12. ;
+MPRINT(TECH_IMPORT):   format ProductCost best12. ;
+334         format VendorRetail best12. ;
+MPRINT(TECH_IMPORT):   format VendorRetail best12. ;
+335      input
+336                  PRODUCT_ID
+337                  product_id_char
+338                  PRODUCT_NM  $
+339                  PRODUCT_LVL2  $
+340                  PRODUCT_LVL3  $
+341                  Line  $
+342                  Collection  $
+343                  Category  $
+344                  ProductCost
+345                  VendorRetail
+346      ;
+MPRINT(TECH_IMPORT):   input PRODUCT_ID product_id_char PRODUCT_NM $ PRODUCT_LVL2 $ PRODUCT_LVL3 $ Line $ Collection $ Category $ 
+ProductCost VendorRetail ;
+347      if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+MPRINT(TECH_IMPORT):   if _ERROR_ then call symputx('_EFIERR_',1);
+348      run;
+MPRINT(TECH_IMPORT):   run;
+NOTE: The infile '/var/data/mipt/course_sku.csv' is:
+      Filename=/var/data/mipt/course_sku.csv,
+      Owner Name=miptnib,Group Name=miptnib,
+      Access Permission=-rw-rw-rw-,
+      Last Modified=09 октября 2019 г. 21:01:56,
+      File Size (bytes)=71052
+NOTE: 379 records were read from the infile '/var/data/mipt/course_sku.csv'.
+      The minimum record length was 145.
+      The maximum record length was 311.
+NOTE: The data set WORK.COURSE_SKU has 379 observations and 10 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.11 seconds
+      cpu time            0.03 seconds
+      
+379 rows created in WORK.COURSE_SKU from /var/data/mipt/course_sku.csv.
+  
+  
+  
+NOTE: WORK.COURSE_SKU data set was successfully created.
+NOTE: The data set WORK.COURSE_SKU has 379 observations and 10 variables.
+NOTE: PROCEDURE IMPORT used (Total process time):
+      real time           1.08 seconds
+      cpu time            0.36 seconds
+      
+MPRINT(TECH_IMPORT):    ;
+MLOGIC(TECH_IMPORT):  %DO loop index variable I is now 7; loop will iterate again.
+MLOGIC(TECH_IMPORT):  %LET (variable name is MVOBJECTSELECTED)
+SYMBOLGEN:  Macro variable LMVOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+SYMBOLGEN:  Macro variable I resolves to 7
+MLOGIC(TECH_IMPORT):  %PUT &=mvObjectSelected
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_inventory
+MVOBJECTSELECTED=course_inventory
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_inventory
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOUTPUTLIBREF resolves to work
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_inventory
+MPRINT(TECH_IMPORT):   proc import datafile="/var/data/mipt/course_inventory.csv" DBMS=csv out=work.course_inventory replace ;
+MPRINT(TECH_IMPORT):   ADLM;
+MPRINT(TECH_IMPORT):   getnames=yes;
+MPRINT(TECH_IMPORT):   run;
+NOTE: Unable to open parameter catalog: SASUSER.PARMS.PARMS.SLIST in update mode. Temporary parameter values will be saved to 
+WORK.PARMS.PARMS.SLIST.
+349   /**********************************************************************
+350   *   PRODUCT:   SAS
+351   *   VERSION:   V.03.05
+352   *   CREATOR:   External File Interface
+353   *   DATE:      18APR21
+354   *   DESC:      Generated SAS Datastep Code
+355   *   TEMPLATE SOURCE:  (None Specified.)
+356   ***********************************************************************/
+357      data WORK.COURSE_INVENTORY    ;
+MPRINT(TECH_IMPORT):   data WORK.COURSE_INVENTORY ;
+358      %let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+359      infile '/var/data/mipt/course_inventory.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+MPRINT(TECH_IMPORT):   infile '/var/data/mipt/course_inventory.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+360         informat PRODUCT_ID best32. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_ID best32. ;
+361         informat LOCATION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_ID best32. ;
+362         informat PERIOD_START_DT DATE9. ;
+MPRINT(TECH_IMPORT):   informat PERIOD_START_DT DATE9. ;
+363         informat STOCK_QTY best32. ;
+MPRINT(TECH_IMPORT):   informat STOCK_QTY best32. ;
+364         informat VERSION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat VERSION_ID best32. ;
+365         informat product_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat product_id_char best32. ;
+366         informat location_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat location_id_char best32. ;
+367         format PRODUCT_ID best12. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_ID best12. ;
+368         format LOCATION_ID best12. ;
+MPRINT(TECH_IMPORT):   format LOCATION_ID best12. ;
+369         format PERIOD_START_DT DATE9. ;
+MPRINT(TECH_IMPORT):   format PERIOD_START_DT DATE9. ;
+370         format STOCK_QTY best12. ;
+MPRINT(TECH_IMPORT):   format STOCK_QTY best12. ;
+371         format VERSION_ID best12. ;
+MPRINT(TECH_IMPORT):   format VERSION_ID best12. ;
+372         format product_id_char best12. ;
+MPRINT(TECH_IMPORT):   format product_id_char best12. ;
+373         format location_id_char best12. ;
+MPRINT(TECH_IMPORT):   format location_id_char best12. ;
+374      input
+375                  PRODUCT_ID
+376                  LOCATION_ID
+377                  PERIOD_START_DT
+378                  STOCK_QTY
+379                  VERSION_ID
+380                  product_id_char
+381                  location_id_char
+382      ;
+MPRINT(TECH_IMPORT):   input PRODUCT_ID LOCATION_ID PERIOD_START_DT STOCK_QTY VERSION_ID product_id_char location_id_char ;
+383      if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+MPRINT(TECH_IMPORT):   if _ERROR_ then call symputx('_EFIERR_',1);
+384      run;
+MPRINT(TECH_IMPORT):   run;
+NOTE: The infile '/var/data/mipt/course_inventory.csv' is:
+      Filename=/var/data/mipt/course_inventory.csv,
+      Owner Name=miptnib,Group Name=miptnib,
+      Access Permission=-rw-rw-rw-,
+      Last Modified=09 октября 2019 г. 21:29:47,
+      File Size (bytes)=564776
+NOTE: 10494 records were read from the infile '/var/data/mipt/course_inventory.csv'.
+      The minimum record length was 51.
+      The maximum record length was 54.
+NOTE: The data set WORK.COURSE_INVENTORY has 10494 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.12 seconds
+      cpu time            0.04 seconds
+      
+10494 rows created in WORK.COURSE_INVENTORY from /var/data/mipt/course_inventory.csv.
+  
+  
+  
+NOTE: WORK.COURSE_INVENTORY data set was successfully created.
+NOTE: The data set WORK.COURSE_INVENTORY has 10494 observations and 7 variables.
+NOTE: PROCEDURE IMPORT used (Total process time):
+      real time           0.95 seconds
+      cpu time            0.37 seconds
+      
+MPRINT(TECH_IMPORT):    ;
+MLOGIC(TECH_IMPORT):  %DO loop index variable I is now 8; loop will iterate again.
+MLOGIC(TECH_IMPORT):  %LET (variable name is MVOBJECTSELECTED)
+SYMBOLGEN:  Macro variable LMVOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+SYMBOLGEN:  Macro variable I resolves to 8
+MLOGIC(TECH_IMPORT):  %PUT &=mvObjectSelected
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_lifecycle
+MVOBJECTSELECTED=course_lifecycle
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_lifecycle
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOUTPUTLIBREF resolves to work
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_lifecycle
+MPRINT(TECH_IMPORT):   proc import datafile="/var/data/mipt/course_lifecycle.csv" DBMS=csv out=work.course_lifecycle replace ;
+MPRINT(TECH_IMPORT):   ADLM;
+MPRINT(TECH_IMPORT):   getnames=yes;
+MPRINT(TECH_IMPORT):   run;
+NOTE: Unable to open parameter catalog: SASUSER.PARMS.PARMS.SLIST in update mode. Temporary parameter values will be saved to 
+WORK.PARMS.PARMS.SLIST.
+385   /**********************************************************************
+386   *   PRODUCT:   SAS
+387   *   VERSION:   V.03.05
+388   *   CREATOR:   External File Interface
+389   *   DATE:      18APR21
+390   *   DESC:      Generated SAS Datastep Code
+391   *   TEMPLATE SOURCE:  (None Specified.)
+392   ***********************************************************************/
+393      data WORK.COURSE_LIFECYCLE    ;
+MPRINT(TECH_IMPORT):   data WORK.COURSE_LIFECYCLE ;
+394      %let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+395      infile '/var/data/mipt/course_lifecycle.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+MPRINT(TECH_IMPORT):   infile '/var/data/mipt/course_lifecycle.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+396         informat PRODUCT_ID best32. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_ID best32. ;
+397         informat LOCATION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_ID best32. ;
+398         informat Phase_in_date DATE9. ;
+MPRINT(TECH_IMPORT):   informat Phase_in_date DATE9. ;
+399         informat Phase_out_date DATE9. ;
+MPRINT(TECH_IMPORT):   informat Phase_out_date DATE9. ;
+400         informat STOP_SALES best32. ;
+MPRINT(TECH_IMPORT):   informat STOP_SALES best32. ;
+401         informat product_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat product_id_char best32. ;
+402         informat location_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat location_id_char best32. ;
+403         format PRODUCT_ID best12. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_ID best12. ;
+404         format LOCATION_ID best12. ;
+MPRINT(TECH_IMPORT):   format LOCATION_ID best12. ;
+405         format Phase_in_date DATE9. ;
+MPRINT(TECH_IMPORT):   format Phase_in_date DATE9. ;
+406         format Phase_out_date DATE9. ;
+MPRINT(TECH_IMPORT):   format Phase_out_date DATE9. ;
+407         format STOP_SALES best12. ;
+MPRINT(TECH_IMPORT):   format STOP_SALES best12. ;
+408         format product_id_char best12. ;
+MPRINT(TECH_IMPORT):   format product_id_char best12. ;
+409         format location_id_char best12. ;
+MPRINT(TECH_IMPORT):   format location_id_char best12. ;
+410      input
+411                  PRODUCT_ID
+412                  LOCATION_ID
+413                  Phase_in_date
+414                  Phase_out_date
+415                  STOP_SALES
+416                  product_id_char
+417                  location_id_char
+418      ;
+MPRINT(TECH_IMPORT):   input PRODUCT_ID LOCATION_ID Phase_in_date Phase_out_date STOP_SALES product_id_char location_id_char ;
+419      if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+MPRINT(TECH_IMPORT):   if _ERROR_ then call symputx('_EFIERR_',1);
+420      run;
+MPRINT(TECH_IMPORT):   run;
+NOTE: The infile '/var/data/mipt/course_lifecycle.csv' is:
+      Filename=/var/data/mipt/course_lifecycle.csv,
+      Owner Name=miptnib,Group Name=miptnib,
+      Access Permission=-rw-rw-rw-,
+      Last Modified=02 марта 2021 г. 13:49:31,
+      File Size (bytes)=16677
+NOTE: 304 records were read from the infile '/var/data/mipt/course_lifecycle.csv'.
+      The minimum record length was 48.
+      The maximum record length was 57.
+NOTE: The data set WORK.COURSE_LIFECYCLE has 304 observations and 7 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.05 seconds
+      cpu time            0.02 seconds
+      
+304 rows created in WORK.COURSE_LIFECYCLE from /var/data/mipt/course_lifecycle.csv.
+  
+  
+  
+NOTE: WORK.COURSE_LIFECYCLE data set was successfully created.
+NOTE: The data set WORK.COURSE_LIFECYCLE has 304 observations and 7 variables.
+NOTE: PROCEDURE IMPORT used (Total process time):
+      real time           0.70 seconds
+      cpu time            0.29 seconds
+      
+MPRINT(TECH_IMPORT):    ;
+MLOGIC(TECH_IMPORT):  %DO loop index variable I is now 9; loop will iterate again.
+MLOGIC(TECH_IMPORT):  %LET (variable name is MVOBJECTSELECTED)
+SYMBOLGEN:  Macro variable LMVOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+SYMBOLGEN:  Macro variable I resolves to 9
+MLOGIC(TECH_IMPORT):  %PUT &=mvObjectSelected
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_movesale_part1
+MVOBJECTSELECTED=course_movesale_part1
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_movesale_part1
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOUTPUTLIBREF resolves to work
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_movesale_part1
+MPRINT(TECH_IMPORT):   proc import datafile="/var/data/mipt/course_movesale_part1.csv" DBMS=csv out=work.course_movesale_part1 
+replace ;
+MPRINT(TECH_IMPORT):   ADLM;
+MPRINT(TECH_IMPORT):   getnames=yes;
+MPRINT(TECH_IMPORT):   run;
+NOTE: Unable to open parameter catalog: SASUSER.PARMS.PARMS.SLIST in update mode. Temporary parameter values will be saved to 
+WORK.PARMS.PARMS.SLIST.
+421   /**********************************************************************
+422   *   PRODUCT:   SAS
+423   *   VERSION:   V.03.05
+424   *   CREATOR:   External File Interface
+425   *   DATE:      18APR21
+426   *   DESC:      Generated SAS Datastep Code
+427   *   TEMPLATE SOURCE:  (None Specified.)
+428   ***********************************************************************/
+429      data WORK.COURSE_MOVESALE_PART1    ;
+MPRINT(TECH_IMPORT):   data WORK.COURSE_MOVESALE_PART1 ;
+430      %let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+431      infile '/var/data/mipt/course_movesale_part1.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+MPRINT(TECH_IMPORT):   infile '/var/data/mipt/course_movesale_part1.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+432         informat PRODUCT_ID best32. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_ID best32. ;
+433         informat LOCATION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_ID best32. ;
+434         informat Date_day DATE9. ;
+MPRINT(TECH_IMPORT):   informat Date_day DATE9. ;
+435         informat Sls_Retail_Qty best32. ;
+MPRINT(TECH_IMPORT):   informat Sls_Retail_Qty best32. ;
+436         informat Sls_Retail_BD_Rub best32. ;
+MPRINT(TECH_IMPORT):   informat Sls_Retail_BD_Rub best32. ;
+437         informat Sls_Retail_AD_Rub best32. ;
+MPRINT(TECH_IMPORT):   informat Sls_Retail_AD_Rub best32. ;
+438         informat Small_Scale_Wholesales best32. ;
+MPRINT(TECH_IMPORT):   informat Small_Scale_Wholesales best32. ;
+439         informat Small_Scale_Wholesales_AD_RUB best32. ;
+MPRINT(TECH_IMPORT):   informat Small_Scale_Wholesales_AD_RUB best32. ;
+440         informat return_qty best32. ;
+MPRINT(TECH_IMPORT):   informat return_qty best32. ;
+441         informat return_ad_rub best32. ;
+MPRINT(TECH_IMPORT):   informat return_ad_rub best32. ;
+442         informat VERSION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat VERSION_ID best32. ;
+443         informat location_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat location_id_char best32. ;
+444         informat product_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat product_id_char best32. ;
+445         format PRODUCT_ID best12. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_ID best12. ;
+446         format LOCATION_ID best12. ;
+MPRINT(TECH_IMPORT):   format LOCATION_ID best12. ;
+447         format Date_day DATE9. ;
+MPRINT(TECH_IMPORT):   format Date_day DATE9. ;
+448         format Sls_Retail_Qty best12. ;
+MPRINT(TECH_IMPORT):   format Sls_Retail_Qty best12. ;
+449         format Sls_Retail_BD_Rub best12. ;
+MPRINT(TECH_IMPORT):   format Sls_Retail_BD_Rub best12. ;
+450         format Sls_Retail_AD_Rub best12. ;
+MPRINT(TECH_IMPORT):   format Sls_Retail_AD_Rub best12. ;
+451         format Small_Scale_Wholesales best12. ;
+MPRINT(TECH_IMPORT):   format Small_Scale_Wholesales best12. ;
+452         format Small_Scale_Wholesales_AD_RUB best12. ;
+MPRINT(TECH_IMPORT):   format Small_Scale_Wholesales_AD_RUB best12. ;
+453         format return_qty best12. ;
+MPRINT(TECH_IMPORT):   format return_qty best12. ;
+454         format return_ad_rub best12. ;
+MPRINT(TECH_IMPORT):   format return_ad_rub best12. ;
+455         format VERSION_ID best12. ;
+MPRINT(TECH_IMPORT):   format VERSION_ID best12. ;
+456         format location_id_char best12. ;
+MPRINT(TECH_IMPORT):   format location_id_char best12. ;
+457         format product_id_char best12. ;
+MPRINT(TECH_IMPORT):   format product_id_char best12. ;
+458      input
+459                  PRODUCT_ID
+460                  LOCATION_ID
+461                  Date_day
+462                  Sls_Retail_Qty
+463                  Sls_Retail_BD_Rub
+464                  Sls_Retail_AD_Rub
+465                  Small_Scale_Wholesales
+466                  Small_Scale_Wholesales_AD_RUB
+467                  return_qty
+468                  return_ad_rub
+469                  VERSION_ID
+470                  location_id_char
+471                  product_id_char
+472      ;
+MPRINT(TECH_IMPORT):   input PRODUCT_ID LOCATION_ID Date_day Sls_Retail_Qty Sls_Retail_BD_Rub Sls_Retail_AD_Rub 
+Small_Scale_Wholesales Small_Scale_Wholesales_AD_RUB return_qty return_ad_rub VERSION_ID location_id_char product_id_char ;
+473      if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+MPRINT(TECH_IMPORT):   if _ERROR_ then call symputx('_EFIERR_',1);
+474      run;
+MPRINT(TECH_IMPORT):   run;
+NOTE: The infile '/var/data/mipt/course_movesale_part1.csv' is:
+      Filename=/var/data/mipt/course_movesale_part1.csv,
+      Owner Name=miptnib,Group Name=miptnib,
+      Access Permission=-rw-r--r--,
+      Last Modified=09 октября 2019 г. 21:53:53,
+      File Size (bytes)=146921
+NOTE: 1999 records were read from the infile '/var/data/mipt/course_movesale_part1.csv'.
+      The minimum record length was 67.
+      The maximum record length was 77.
+NOTE: The data set WORK.COURSE_MOVESALE_PART1 has 1999 observations and 13 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.09 seconds
+      cpu time            0.04 seconds
+      
+1999 rows created in WORK.COURSE_MOVESALE_PART1 from /var/data/mipt/course_movesale_part1.csv.
+  
+  
+  
+NOTE: WORK.COURSE_MOVESALE_PART1 data set was successfully created.
+NOTE: The data set WORK.COURSE_MOVESALE_PART1 has 1999 observations and 13 variables.
+NOTE: PROCEDURE IMPORT used (Total process time):
+      real time           0.99 seconds
+      cpu time            0.37 seconds
+      
+MPRINT(TECH_IMPORT):    ;
+MLOGIC(TECH_IMPORT):  %DO loop index variable I is now 10; loop will iterate again.
+MLOGIC(TECH_IMPORT):  %LET (variable name is MVOBJECTSELECTED)
+SYMBOLGEN:  Macro variable LMVOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+SYMBOLGEN:  Macro variable I resolves to 10
+MLOGIC(TECH_IMPORT):  %PUT &=mvObjectSelected
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_movesale_part2
+MVOBJECTSELECTED=course_movesale_part2
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_movesale_part2
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOUTPUTLIBREF resolves to work
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_movesale_part2
+MPRINT(TECH_IMPORT):   proc import datafile="/var/data/mipt/course_movesale_part2.csv" DBMS=csv out=work.course_movesale_part2 
+replace ;
+MPRINT(TECH_IMPORT):   ADLM;
+MPRINT(TECH_IMPORT):   getnames=yes;
+MPRINT(TECH_IMPORT):   run;
+NOTE: Unable to open parameter catalog: SASUSER.PARMS.PARMS.SLIST in update mode. Temporary parameter values will be saved to 
+WORK.PARMS.PARMS.SLIST.
+475   /**********************************************************************
+476   *   PRODUCT:   SAS
+477   *   VERSION:   V.03.05
+478   *   CREATOR:   External File Interface
+479   *   DATE:      18APR21
+480   *   DESC:      Generated SAS Datastep Code
+481   *   TEMPLATE SOURCE:  (None Specified.)
+482   ***********************************************************************/
+483      data WORK.COURSE_MOVESALE_PART2    ;
+MPRINT(TECH_IMPORT):   data WORK.COURSE_MOVESALE_PART2 ;
+484      %let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+485      infile '/var/data/mipt/course_movesale_part2.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+MPRINT(TECH_IMPORT):   infile '/var/data/mipt/course_movesale_part2.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+486         informat PRODUCT_ID best32. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_ID best32. ;
+487         informat LOCATION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_ID best32. ;
+488         informat Date_day DATE9. ;
+MPRINT(TECH_IMPORT):   informat Date_day DATE9. ;
+489         informat Sls_Retail_Qty best32. ;
+MPRINT(TECH_IMPORT):   informat Sls_Retail_Qty best32. ;
+490         informat Sls_Retail_BD_Rub best32. ;
+MPRINT(TECH_IMPORT):   informat Sls_Retail_BD_Rub best32. ;
+491         informat Sls_Retail_AD_Rub best32. ;
+MPRINT(TECH_IMPORT):   informat Sls_Retail_AD_Rub best32. ;
+492         informat Small_Scale_Wholesales best32. ;
+MPRINT(TECH_IMPORT):   informat Small_Scale_Wholesales best32. ;
+493         informat Small_Scale_Wholesales_AD_RUB best32. ;
+MPRINT(TECH_IMPORT):   informat Small_Scale_Wholesales_AD_RUB best32. ;
+494         informat return_qty best32. ;
+MPRINT(TECH_IMPORT):   informat return_qty best32. ;
+495         informat return_ad_rub best32. ;
+MPRINT(TECH_IMPORT):   informat return_ad_rub best32. ;
+496         informat VERSION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat VERSION_ID best32. ;
+497         informat location_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat location_id_char best32. ;
+498         informat product_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat product_id_char best32. ;
+499         format PRODUCT_ID best12. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_ID best12. ;
+500         format LOCATION_ID best12. ;
+MPRINT(TECH_IMPORT):   format LOCATION_ID best12. ;
+501         format Date_day DATE9. ;
+MPRINT(TECH_IMPORT):   format Date_day DATE9. ;
+502         format Sls_Retail_Qty best12. ;
+MPRINT(TECH_IMPORT):   format Sls_Retail_Qty best12. ;
+503         format Sls_Retail_BD_Rub best12. ;
+MPRINT(TECH_IMPORT):   format Sls_Retail_BD_Rub best12. ;
+504         format Sls_Retail_AD_Rub best12. ;
+MPRINT(TECH_IMPORT):   format Sls_Retail_AD_Rub best12. ;
+505         format Small_Scale_Wholesales best12. ;
+MPRINT(TECH_IMPORT):   format Small_Scale_Wholesales best12. ;
+506         format Small_Scale_Wholesales_AD_RUB best12. ;
+MPRINT(TECH_IMPORT):   format Small_Scale_Wholesales_AD_RUB best12. ;
+507         format return_qty best12. ;
+MPRINT(TECH_IMPORT):   format return_qty best12. ;
+508         format return_ad_rub best12. ;
+MPRINT(TECH_IMPORT):   format return_ad_rub best12. ;
+509         format VERSION_ID best12. ;
+MPRINT(TECH_IMPORT):   format VERSION_ID best12. ;
+510         format location_id_char best12. ;
+MPRINT(TECH_IMPORT):   format location_id_char best12. ;
+511         format product_id_char best12. ;
+MPRINT(TECH_IMPORT):   format product_id_char best12. ;
+512      input
+513                  PRODUCT_ID
+514                  LOCATION_ID
+515                  Date_day
+516                  Sls_Retail_Qty
+517                  Sls_Retail_BD_Rub
+518                  Sls_Retail_AD_Rub
+519                  Small_Scale_Wholesales
+520                  Small_Scale_Wholesales_AD_RUB
+521                  return_qty
+522                  return_ad_rub
+523                  VERSION_ID
+524                  location_id_char
+525                  product_id_char
+526      ;
+MPRINT(TECH_IMPORT):   input PRODUCT_ID LOCATION_ID Date_day Sls_Retail_Qty Sls_Retail_BD_Rub Sls_Retail_AD_Rub 
+Small_Scale_Wholesales Small_Scale_Wholesales_AD_RUB return_qty return_ad_rub VERSION_ID location_id_char product_id_char ;
+527      if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+MPRINT(TECH_IMPORT):   if _ERROR_ then call symputx('_EFIERR_',1);
+528      run;
+MPRINT(TECH_IMPORT):   run;
+NOTE: The infile '/var/data/mipt/course_movesale_part2.csv' is:
+      Filename=/var/data/mipt/course_movesale_part2.csv,
+      Owner Name=miptnib,Group Name=miptnib,
+      Access Permission=-rw-r--r--,
+      Last Modified=09 октября 2019 г. 22:02:28,
+      File Size (bytes)=146966
+NOTE: 2000 records were read from the infile '/var/data/mipt/course_movesale_part2.csv'.
+      The minimum record length was 67.
+      The maximum record length was 77.
+NOTE: The data set WORK.COURSE_MOVESALE_PART2 has 2000 observations and 13 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.08 seconds
+      cpu time            0.02 seconds
+      
+2000 rows created in WORK.COURSE_MOVESALE_PART2 from /var/data/mipt/course_movesale_part2.csv.
+  
+  
+  
+NOTE: WORK.COURSE_MOVESALE_PART2 data set was successfully created.
+NOTE: The data set WORK.COURSE_MOVESALE_PART2 has 2000 observations and 13 variables.
+NOTE: PROCEDURE IMPORT used (Total process time):
+      real time           0.86 seconds
+      cpu time            0.35 seconds
+      
+MPRINT(TECH_IMPORT):    ;
+MLOGIC(TECH_IMPORT):  %DO loop index variable I is now 11; loop will iterate again.
+MLOGIC(TECH_IMPORT):  %LET (variable name is MVOBJECTSELECTED)
+SYMBOLGEN:  Macro variable LMVOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+SYMBOLGEN:  Macro variable I resolves to 11
+MLOGIC(TECH_IMPORT):  %PUT &=mvObjectSelected
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_movesale_part3
+MVOBJECTSELECTED=course_movesale_part3
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_movesale_part3
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOUTPUTLIBREF resolves to work
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_movesale_part3
+MPRINT(TECH_IMPORT):   proc import datafile="/var/data/mipt/course_movesale_part3.csv" DBMS=csv out=work.course_movesale_part3 
+replace ;
+MPRINT(TECH_IMPORT):   ADLM;
+MPRINT(TECH_IMPORT):   getnames=yes;
+MPRINT(TECH_IMPORT):   run;
+NOTE: Unable to open parameter catalog: SASUSER.PARMS.PARMS.SLIST in update mode. Temporary parameter values will be saved to 
+WORK.PARMS.PARMS.SLIST.
+529   /**********************************************************************
+530   *   PRODUCT:   SAS
+531   *   VERSION:   V.03.05
+532   *   CREATOR:   External File Interface
+533   *   DATE:      18APR21
+534   *   DESC:      Generated SAS Datastep Code
+535   *   TEMPLATE SOURCE:  (None Specified.)
+536   ***********************************************************************/
+537      data WORK.COURSE_MOVESALE_PART3    ;
+MPRINT(TECH_IMPORT):   data WORK.COURSE_MOVESALE_PART3 ;
+538      %let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+539      infile '/var/data/mipt/course_movesale_part3.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+MPRINT(TECH_IMPORT):   infile '/var/data/mipt/course_movesale_part3.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+540         informat PRODUCT_ID best32. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_ID best32. ;
+541         informat LOCATION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_ID best32. ;
+542         informat Date_day DATE9. ;
+MPRINT(TECH_IMPORT):   informat Date_day DATE9. ;
+543         informat Sls_Retail_Qty best32. ;
+MPRINT(TECH_IMPORT):   informat Sls_Retail_Qty best32. ;
+544         informat Sls_Retail_BD_Rub best32. ;
+MPRINT(TECH_IMPORT):   informat Sls_Retail_BD_Rub best32. ;
+545         informat Sls_Retail_AD_Rub best32. ;
+MPRINT(TECH_IMPORT):   informat Sls_Retail_AD_Rub best32. ;
+546         informat Small_Scale_Wholesales best32. ;
+MPRINT(TECH_IMPORT):   informat Small_Scale_Wholesales best32. ;
+547         informat Small_Scale_Wholesales_AD_RUB best32. ;
+MPRINT(TECH_IMPORT):   informat Small_Scale_Wholesales_AD_RUB best32. ;
+548         informat return_qty best32. ;
+MPRINT(TECH_IMPORT):   informat return_qty best32. ;
+549         informat return_ad_rub best32. ;
+MPRINT(TECH_IMPORT):   informat return_ad_rub best32. ;
+550         informat VERSION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat VERSION_ID best32. ;
+551         informat location_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat location_id_char best32. ;
+552         informat product_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat product_id_char best32. ;
+553         format PRODUCT_ID best12. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_ID best12. ;
+554         format LOCATION_ID best12. ;
+MPRINT(TECH_IMPORT):   format LOCATION_ID best12. ;
+555         format Date_day DATE9. ;
+MPRINT(TECH_IMPORT):   format Date_day DATE9. ;
+556         format Sls_Retail_Qty best12. ;
+MPRINT(TECH_IMPORT):   format Sls_Retail_Qty best12. ;
+557         format Sls_Retail_BD_Rub best12. ;
+MPRINT(TECH_IMPORT):   format Sls_Retail_BD_Rub best12. ;
+558         format Sls_Retail_AD_Rub best12. ;
+MPRINT(TECH_IMPORT):   format Sls_Retail_AD_Rub best12. ;
+559         format Small_Scale_Wholesales best12. ;
+MPRINT(TECH_IMPORT):   format Small_Scale_Wholesales best12. ;
+560         format Small_Scale_Wholesales_AD_RUB best12. ;
+MPRINT(TECH_IMPORT):   format Small_Scale_Wholesales_AD_RUB best12. ;
+561         format return_qty best12. ;
+MPRINT(TECH_IMPORT):   format return_qty best12. ;
+562         format return_ad_rub best12. ;
+MPRINT(TECH_IMPORT):   format return_ad_rub best12. ;
+563         format VERSION_ID best12. ;
+MPRINT(TECH_IMPORT):   format VERSION_ID best12. ;
+564         format location_id_char best12. ;
+MPRINT(TECH_IMPORT):   format location_id_char best12. ;
+565         format product_id_char best12. ;
+MPRINT(TECH_IMPORT):   format product_id_char best12. ;
+566      input
+567                  PRODUCT_ID
+568                  LOCATION_ID
+569                  Date_day
+570                  Sls_Retail_Qty
+571                  Sls_Retail_BD_Rub
+572                  Sls_Retail_AD_Rub
+573                  Small_Scale_Wholesales
+574                  Small_Scale_Wholesales_AD_RUB
+575                  return_qty
+576                  return_ad_rub
+577                  VERSION_ID
+578                  location_id_char
+579                  product_id_char
+580      ;
+MPRINT(TECH_IMPORT):   input PRODUCT_ID LOCATION_ID Date_day Sls_Retail_Qty Sls_Retail_BD_Rub Sls_Retail_AD_Rub 
+Small_Scale_Wholesales Small_Scale_Wholesales_AD_RUB return_qty return_ad_rub VERSION_ID location_id_char product_id_char ;
+581      if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+MPRINT(TECH_IMPORT):   if _ERROR_ then call symputx('_EFIERR_',1);
+582      run;
+MPRINT(TECH_IMPORT):   run;
+NOTE: The infile '/var/data/mipt/course_movesale_part3.csv' is:
+      Filename=/var/data/mipt/course_movesale_part3.csv,
+      Owner Name=miptnib,Group Name=miptnib,
+      Access Permission=-rw-r--r--,
+      Last Modified=09 октября 2019 г. 21:58:02,
+      File Size (bytes)=147053
+NOTE: 2000 records were read from the infile '/var/data/mipt/course_movesale_part3.csv'.
+      The minimum record length was 67.
+      The maximum record length was 77.
+NOTE: The data set WORK.COURSE_MOVESALE_PART3 has 2000 observations and 13 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.16 seconds
+      cpu time            0.05 seconds
+      
+2000 rows created in WORK.COURSE_MOVESALE_PART3 from /var/data/mipt/course_movesale_part3.csv.
+  
+  
+  
+NOTE: WORK.COURSE_MOVESALE_PART3 data set was successfully created.
+NOTE: The data set WORK.COURSE_MOVESALE_PART3 has 2000 observations and 13 variables.
+NOTE: PROCEDURE IMPORT used (Total process time):
+      real time           1.09 seconds
+      cpu time            0.41 seconds
+      
+MPRINT(TECH_IMPORT):    ;
+MLOGIC(TECH_IMPORT):  %DO loop index variable I is now 12; loop will iterate again.
+MLOGIC(TECH_IMPORT):  %LET (variable name is MVOBJECTSELECTED)
+SYMBOLGEN:  Macro variable LMVOBJECTNAME resolves to course_tt course_tt_sku course_promo course_sales_inv course_sum_sls_tt_date 
+            course_sku course_inventory  course_lifecycle  course_movesale_part1 course_movesale_part2 course_movesale_part3 
+            course_movesale_part4
+SYMBOLGEN:  Macro variable I resolves to 12
+MLOGIC(TECH_IMPORT):  %PUT &=mvObjectSelected
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_movesale_part4
+MVOBJECTSELECTED=course_movesale_part4
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_movesale_part4
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOBJECTTYPE resolves to csv
+SYMBOLGEN:  Macro variable LMVOUTPUTLIBREF resolves to work
+SYMBOLGEN:  Macro variable MVOBJECTSELECTED resolves to course_movesale_part4
+MPRINT(TECH_IMPORT):   proc import datafile="/var/data/mipt/course_movesale_part4.csv" DBMS=csv out=work.course_movesale_part4 
+replace ;
+MPRINT(TECH_IMPORT):   ADLM;
+MPRINT(TECH_IMPORT):   getnames=yes;
+MPRINT(TECH_IMPORT):   run;
+NOTE: Unable to open parameter catalog: SASUSER.PARMS.PARMS.SLIST in update mode. Temporary parameter values will be saved to 
+WORK.PARMS.PARMS.SLIST.
+583   /**********************************************************************
+584   *   PRODUCT:   SAS
+585   *   VERSION:   V.03.05
+586   *   CREATOR:   External File Interface
+587   *   DATE:      18APR21
+588   *   DESC:      Generated SAS Datastep Code
+589   *   TEMPLATE SOURCE:  (None Specified.)
+590   ***********************************************************************/
+591      data WORK.COURSE_MOVESALE_PART4    ;
+MPRINT(TECH_IMPORT):   data WORK.COURSE_MOVESALE_PART4 ;
+592      %let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+593      infile '/var/data/mipt/course_movesale_part4.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+MPRINT(TECH_IMPORT):   infile '/var/data/mipt/course_movesale_part4.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+594         informat PRODUCT_ID best32. ;
+MPRINT(TECH_IMPORT):   informat PRODUCT_ID best32. ;
+595         informat LOCATION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat LOCATION_ID best32. ;
+596         informat Date_day DATE9. ;
+MPRINT(TECH_IMPORT):   informat Date_day DATE9. ;
+597         informat Sls_Retail_Qty best32. ;
+MPRINT(TECH_IMPORT):   informat Sls_Retail_Qty best32. ;
+598         informat Sls_Retail_BD_Rub best32. ;
+MPRINT(TECH_IMPORT):   informat Sls_Retail_BD_Rub best32. ;
+599         informat Sls_Retail_AD_Rub best32. ;
+MPRINT(TECH_IMPORT):   informat Sls_Retail_AD_Rub best32. ;
+600         informat Small_Scale_Wholesales best32. ;
+MPRINT(TECH_IMPORT):   informat Small_Scale_Wholesales best32. ;
+601         informat Small_Scale_Wholesales_AD_RUB best32. ;
+MPRINT(TECH_IMPORT):   informat Small_Scale_Wholesales_AD_RUB best32. ;
+602         informat return_qty best32. ;
+MPRINT(TECH_IMPORT):   informat return_qty best32. ;
+603         informat return_ad_rub best32. ;
+MPRINT(TECH_IMPORT):   informat return_ad_rub best32. ;
+604         informat VERSION_ID best32. ;
+MPRINT(TECH_IMPORT):   informat VERSION_ID best32. ;
+605         informat location_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat location_id_char best32. ;
+606         informat product_id_char best32. ;
+MPRINT(TECH_IMPORT):   informat product_id_char best32. ;
+607         format PRODUCT_ID best12. ;
+MPRINT(TECH_IMPORT):   format PRODUCT_ID best12. ;
+608         format LOCATION_ID best12. ;
+MPRINT(TECH_IMPORT):   format LOCATION_ID best12. ;
+609         format Date_day DATE9. ;
+MPRINT(TECH_IMPORT):   format Date_day DATE9. ;
+610         format Sls_Retail_Qty best12. ;
+MPRINT(TECH_IMPORT):   format Sls_Retail_Qty best12. ;
+611         format Sls_Retail_BD_Rub best12. ;
+MPRINT(TECH_IMPORT):   format Sls_Retail_BD_Rub best12. ;
+612         format Sls_Retail_AD_Rub best12. ;
+MPRINT(TECH_IMPORT):   format Sls_Retail_AD_Rub best12. ;
+613         format Small_Scale_Wholesales best12. ;
+MPRINT(TECH_IMPORT):   format Small_Scale_Wholesales best12. ;
+614         format Small_Scale_Wholesales_AD_RUB best12. ;
+MPRINT(TECH_IMPORT):   format Small_Scale_Wholesales_AD_RUB best12. ;
+615         format return_qty best12. ;
+MPRINT(TECH_IMPORT):   format return_qty best12. ;
+616         format return_ad_rub best12. ;
+MPRINT(TECH_IMPORT):   format return_ad_rub best12. ;
+617         format VERSION_ID best12. ;
+MPRINT(TECH_IMPORT):   format VERSION_ID best12. ;
+618         format location_id_char best12. ;
+MPRINT(TECH_IMPORT):   format location_id_char best12. ;
+619         format product_id_char best12. ;
+MPRINT(TECH_IMPORT):   format product_id_char best12. ;
+620      input
+621                  PRODUCT_ID
+622                  LOCATION_ID
+623                  Date_day
+624                  Sls_Retail_Qty
+625                  Sls_Retail_BD_Rub
+626                  Sls_Retail_AD_Rub
+627                  Small_Scale_Wholesales
+628                  Small_Scale_Wholesales_AD_RUB
+629                  return_qty
+630                  return_ad_rub
+631                  VERSION_ID
+632                  location_id_char
+633                  product_id_char
+634      ;
+MPRINT(TECH_IMPORT):   input PRODUCT_ID LOCATION_ID Date_day Sls_Retail_Qty Sls_Retail_BD_Rub Sls_Retail_AD_Rub 
+Small_Scale_Wholesales Small_Scale_Wholesales_AD_RUB return_qty return_ad_rub VERSION_ID location_id_char product_id_char ;
+635      if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+MPRINT(TECH_IMPORT):   if _ERROR_ then call symputx('_EFIERR_',1);
+636      run;
+MPRINT(TECH_IMPORT):   run;
+NOTE: The infile '/var/data/mipt/course_movesale_part4.csv' is:
+      Filename=/var/data/mipt/course_movesale_part4.csv,
+      Owner Name=miptnib,Group Name=miptnib,
+      Access Permission=-rw-r--r--,
+      Last Modified=09 октября 2019 г. 21:59:55,
+      File Size (bytes)=214630
+NOTE: 2883 records were read from the infile '/var/data/mipt/course_movesale_part4.csv'.
+      The minimum record length was 68.
+      The maximum record length was 77.
+NOTE: The data set WORK.COURSE_MOVESALE_PART4 has 2883 observations and 13 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.11 seconds
+      cpu time            0.05 seconds
+      
+2883 rows created in WORK.COURSE_MOVESALE_PART4 from /var/data/mipt/course_movesale_part4.csv.
+  
+  
+  
+NOTE: WORK.COURSE_MOVESALE_PART4 data set was successfully created.
+NOTE: The data set WORK.COURSE_MOVESALE_PART4 has 2883 observations and 13 variables.
+NOTE: PROCEDURE IMPORT used (Total process time):
+      real time           1.08 seconds
+      cpu time            0.42 seconds
+      
+MPRINT(TECH_IMPORT):    ;
+MLOGIC(TECH_IMPORT):  %DO loop index variable I is now 13; loop will not iterate again.
+MLOGIC(TECH_IMPORT):  Ending execution.
+637  
+638  %macro tasks();
+639  
+640  /* Task1 */
+641  
+642  proc sql noprint;
+643    create table work.valid_structure_movesale
+644    (
+645      Date_day numeric,
+646      LOCATION_ID numeric,
+647      PRODUCT_ID numeric,
+648      Sls_Retail_AD_Rub numeric,
+649      Sls_Retail_BD_Rub numeric,
+650      Sls_Retail_Qty numeric,
+651      Small_Scale_Wholesales numeric,
+652      Small_Scale_Wholesales_AD_RUB numeric,
+653      VERSION_ID numeric,
+654      location_id_char numeric,
+655      product_id_char numeric,
+656      return_ad_rub numeric,
+657      return_qty numeric
+658    )
+659  ;
+660  quit;
+661  
+662  /* Task2 */
+663  
+664  proc sql noprint;
+665    create table work.get_objects as
+666    (select *
+667    from sashelp.vtable
+668    where libname="WORK" and memname contains "MOVESALE_");
+669  quit;
+670  
+671  
+672  
+673  /* Task3 */
+674  
+675  proc sql noprint;
+676    select memname
+677    into:mvTABLE_NAMES separated by " "
+678    from work.get_objects;
+679  
+680    select libname
+681    into:mvLIB_NAMES separated by " "
+682    from work.get_objects;
+683  quit;
+684  
+685  %put &mvTABLE_NAMES.;
+686  %put &mvLIB_NAMES.;
+687  
+688  /* Task4 */
+689  %let mvLIST_CNT = %sysfunc(countw(&mvTABLE_NAMES.));
+690  
+691  %put &mvLIST_CNT;
+692  
+693  /* Task5 */
+694  proc contents noprint data=work.valid_structure_movesale
+695                out=work.valid_cont;
+696  
+697  proc sql;
+698    create table work.movesale_valid
+699    like work.valid_structure_movesale;
+700  quit;
+701  
+702  /* Task6 */
+703  %local lmvTABLE_NAME
+704         lmvLIB_NAME
+705  ;
+706  
+707  %do i=1 %to &mvLIST_CNT.;
+708    %let lmvTABLE_NAME = %scan(&mvTABLE_NAMES., &i., %str( ));
+709    %let lmvLIB_NAME = %scan(&mvLIB_NAMES., &i., %str( ));
+710    proc contents noprint data=&lmvLIB_NAME..&lmvTABLE_NAME.
+711                          out=invalid_cont;
+712    proc sql;
+713      create table work.CHECK_FOR_NEW_COLUMNS AS
+714      (
+715        select T1.name,
+716               COALESCE(T2.name, 'INVALID COLUMN') AS CLMN_FLAG,
+717               T2.length,
+718               T2.type
+719        from
+720        (
+721          valid_cont T1
+722        left join
+723          invalid_cont T2
+724        on T1.name = T2.name
+725        )
+726      );
+727    quit;
+728  
+729    proc sql;
+730      create table work.T_WITH_VALID_FLG as
+731      (
+732         select T1.NAME,
+733                T1.CLMN_FLAG,
+734                COALESCE(T2.NAME, 'INVALID FORMAT') AS ERR_DESC
+735         from
+736         (
+737            (select *
+738            from work.CHECK_FOR_NEW_COLUMNS
+739            where clmn_flag <> "INVALID COLUMN") as T1
+740          left join
+741            valid_cont as T2
+742          on T1.name = T2.name and T1.length = T2.length and T1.type = T2.type
+743         )
+744      );
+745    quit;
+746  
+747    proc sql noprint;
+748      create table work.ONLY_VALID_DATA as
+749      (
+750         select *
+751         from work.T_WITH_VALID_FLG
+752         where err_desc <> "INVALID FORMAT"
+753      );
+754    quit;
+755  
+756    proc sql noprint;
+757      select count(name)
+758      into:lmvFiltered_Cnt
+759      from work.ONLY_VALID_DATA;
+760  
+761      select count(name)
+762      into:lmvValid_Cnt
+763      from valid_cont;
+764    quit;
+765  
+766    %if &lmvFiltered_Cnt. = &lmvValid_Cnt. %then
+767    %do;
+768      proc append
+769        BASE = work.movesale_valid
+770        DATA = &lmvLIB_NAME..&lmvTABLE_NAME.;
+771      run;
+772    %end;
+773  
+774  %end;
+775  
+776  %mend tasks;
+777  
+778  %tasks();
+MLOGIC(TASKS):  Beginning execution.
+MPRINT(TASKS):   proc sql noprint;
+MPRINT(TASKS):   create table work.valid_structure_movesale ( Date_day numeric, LOCATION_ID numeric, PRODUCT_ID numeric, 
+Sls_Retail_AD_Rub numeric, Sls_Retail_BD_Rub numeric, Sls_Retail_Qty numeric, Small_Scale_Wholesales numeric, 
+Small_Scale_Wholesales_AD_RUB numeric, VERSION_ID numeric, location_id_char numeric, product_id_char numeric, return_ad_rub 
+numeric, return_qty numeric ) ;
+NOTE: Table WORK.VALID_STRUCTURE_MOVESALE created, with 0 rows and 13 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.05 seconds
+      cpu time            0.03 seconds
+      
+MPRINT(TASKS):   proc sql noprint;
+MPRINT(TASKS):   create table work.get_objects as (select * from sashelp.vtable where libname="WORK" and memname contains 
+"MOVESALE_");
+NOTE: Table WORK.GET_OBJECTS created, with 4 rows and 41 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.10 seconds
+      cpu time            0.04 seconds
+      
+MPRINT(TASKS):   proc sql noprint;
+MPRINT(TASKS):   select memname into:mvTABLE_NAMES separated by " " from work.get_objects;
+MPRINT(TASKS):   select libname into:mvLIB_NAMES separated by " " from work.get_objects;
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.02 seconds
+      
+MLOGIC(TASKS):  %PUT &mvTABLE_NAMES.
+SYMBOLGEN:  Macro variable MVTABLE_NAMES resolves to COURSE_MOVESALE_PART1 COURSE_MOVESALE_PART2 COURSE_MOVESALE_PART3 
+            COURSE_MOVESALE_PART4
+COURSE_MOVESALE_PART1 COURSE_MOVESALE_PART2 COURSE_MOVESALE_PART3 COURSE_MOVESALE_PART4
+MLOGIC(TASKS):  %PUT &mvLIB_NAMES.
+SYMBOLGEN:  Macro variable MVLIB_NAMES resolves to WORK WORK WORK WORK
+WORK WORK WORK WORK
+MLOGIC(TASKS):  %LET (variable name is MVLIST_CNT)
+SYMBOLGEN:  Macro variable MVTABLE_NAMES resolves to COURSE_MOVESALE_PART1 COURSE_MOVESALE_PART2 COURSE_MOVESALE_PART3 
+            COURSE_MOVESALE_PART4
+MLOGIC(TASKS):  %PUT &mvLIST_CNT
+SYMBOLGEN:  Macro variable MVLIST_CNT resolves to 4
+4
+MPRINT(TASKS):   proc contents noprint data=work.valid_structure_movesale out=work.valid_cont;
+NOTE: The data set WORK.VALID_CONT has 13 observations and 41 variables.
+NOTE: PROCEDURE CONTENTS used (Total process time):
+      real time           0.07 seconds
+      cpu time            0.03 seconds
+      
+MPRINT(TASKS):   proc sql;
+MPRINT(TASKS):   create table work.movesale_valid like work.valid_structure_movesale;
+NOTE: Table WORK.MOVESALE_VALID created, with 0 rows and 13 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.02 seconds
+      cpu time            0.01 seconds
+      
+MLOGIC(TASKS):  %LOCAL  LMVTABLE_NAME        LMVLIB_NAME 
+SYMBOLGEN:  Macro variable MVLIST_CNT resolves to 4
+MLOGIC(TASKS):  %DO loop beginning; index variable I; start value is 1; stop value is 4; by value is 1.  
+MLOGIC(TASKS):  %LET (variable name is LMVTABLE_NAME)
+SYMBOLGEN:  Macro variable MVTABLE_NAMES resolves to COURSE_MOVESALE_PART1 COURSE_MOVESALE_PART2 COURSE_MOVESALE_PART3 
+            COURSE_MOVESALE_PART4
+SYMBOLGEN:  Macro variable I resolves to 1
+MLOGIC(TASKS):  %LET (variable name is LMVLIB_NAME)
+SYMBOLGEN:  Macro variable MVLIB_NAMES resolves to WORK WORK WORK WORK
+SYMBOLGEN:  Macro variable I resolves to 1
+SYMBOLGEN:  Macro variable LMVLIB_NAME resolves to WORK
+SYMBOLGEN:  Macro variable LMVTABLE_NAME resolves to COURSE_MOVESALE_PART1
+MPRINT(TASKS):   proc contents noprint data=WORK.COURSE_MOVESALE_PART1 out=invalid_cont;
+NOTE: The data set WORK.INVALID_CONT has 13 observations and 41 variables.
+NOTE: PROCEDURE CONTENTS used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.02 seconds
+      
+MPRINT(TASKS):   proc sql;
+MPRINT(TASKS):   create table work.CHECK_FOR_NEW_COLUMNS AS ( select T1.name, COALESCE(T2.name, 'INVALID COLUMN') AS CLMN_FLAG, 
+T2.length, T2.type from ( valid_cont T1 left join invalid_cont T2 on T1.name = T2.name ) );
+NOTE: Table WORK.CHECK_FOR_NEW_COLUMNS created, with 13 rows and 4 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.04 seconds
+      
+MPRINT(TASKS):   proc sql;
+MPRINT(TASKS):   create table work.T_WITH_VALID_FLG as ( select T1.NAME, T1.CLMN_FLAG, COALESCE(T2.NAME, 'INVALID FORMAT') AS 
+ERR_DESC from ( (select * from work.CHECK_FOR_NEW_COLUMNS where clmn_flag <> "INVALID COLUMN") as T1 left join valid_cont as T2 on 
+T1.name = T2.name and T1.length = T2.length and T1.type = T2.type ) );
+NOTE: The "<>" operator is interpreted as "not equals".
+NOTE: Table WORK.T_WITH_VALID_FLG created, with 13 rows and 3 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.07 seconds
+      cpu time            0.03 seconds
+      
+MPRINT(TASKS):   proc sql noprint;
+MPRINT(TASKS):   create table work.ONLY_VALID_DATA as ( select * from work.T_WITH_VALID_FLG where err_desc <> "INVALID FORMAT" );
+NOTE: The "<>" operator is interpreted as "not equals".
+NOTE: Table WORK.ONLY_VALID_DATA created, with 13 rows and 3 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.02 seconds
+      cpu time            0.02 seconds
+      
+MPRINT(TASKS):   proc sql noprint;
+MPRINT(TASKS):   select count(name) into:lmvFiltered_Cnt from work.ONLY_VALID_DATA;
+MPRINT(TASKS):   select count(name) into:lmvValid_Cnt from valid_cont;
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.02 seconds
+      cpu time            0.03 seconds
+      
+SYMBOLGEN:  Macro variable LMVFILTERED_CNT resolves to       13
+SYMBOLGEN:  Macro variable LMVVALID_CNT resolves to       13
+MLOGIC(TASKS):  %IF condition &lmvFiltered_Cnt. = &lmvValid_Cnt. is TRUE
+SYMBOLGEN:  Macro variable LMVLIB_NAME resolves to WORK
+SYMBOLGEN:  Macro variable LMVTABLE_NAME resolves to COURSE_MOVESALE_PART1
+MPRINT(TASKS):   proc append BASE = work.movesale_valid DATA = WORK.COURSE_MOVESALE_PART1;
+MPRINT(TASKS):   run;
+NOTE: Appending WORK.COURSE_MOVESALE_PART1 to WORK.MOVESALE_VALID.
+NOTE: There were 1999 observations read from the data set WORK.COURSE_MOVESALE_PART1.
+NOTE: 1999 observations added.
+NOTE: The data set WORK.MOVESALE_VALID has 1999 observations and 13 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.05 seconds
+      cpu time            0.03 seconds
+      
+MLOGIC(TASKS):  %DO loop index variable I is now 2; loop will iterate again.
+MLOGIC(TASKS):  %LET (variable name is LMVTABLE_NAME)
+SYMBOLGEN:  Macro variable MVTABLE_NAMES resolves to COURSE_MOVESALE_PART1 COURSE_MOVESALE_PART2 COURSE_MOVESALE_PART3 
+            COURSE_MOVESALE_PART4
+SYMBOLGEN:  Macro variable I resolves to 2
+MLOGIC(TASKS):  %LET (variable name is LMVLIB_NAME)
+SYMBOLGEN:  Macro variable MVLIB_NAMES resolves to WORK WORK WORK WORK
+SYMBOLGEN:  Macro variable I resolves to 2
+SYMBOLGEN:  Macro variable LMVLIB_NAME resolves to WORK
+SYMBOLGEN:  Macro variable LMVTABLE_NAME resolves to COURSE_MOVESALE_PART2
+MPRINT(TASKS):   proc contents noprint data=WORK.COURSE_MOVESALE_PART2 out=invalid_cont;
+NOTE: The data set WORK.INVALID_CONT has 13 observations and 41 variables.
+NOTE: PROCEDURE CONTENTS used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.02 seconds
+      
+MPRINT(TASKS):   proc sql;
+MPRINT(TASKS):   create table work.CHECK_FOR_NEW_COLUMNS AS ( select T1.name, COALESCE(T2.name, 'INVALID COLUMN') AS CLMN_FLAG, 
+T2.length, T2.type from ( valid_cont T1 left join invalid_cont T2 on T1.name = T2.name ) );
+NOTE: Table WORK.CHECK_FOR_NEW_COLUMNS created, with 13 rows and 4 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.07 seconds
+      cpu time            0.05 seconds
+      
+MPRINT(TASKS):   proc sql;
+MPRINT(TASKS):   create table work.T_WITH_VALID_FLG as ( select T1.NAME, T1.CLMN_FLAG, COALESCE(T2.NAME, 'INVALID FORMAT') AS 
+ERR_DESC from ( (select * from work.CHECK_FOR_NEW_COLUMNS where clmn_flag <> "INVALID COLUMN") as T1 left join valid_cont as T2 on 
+T1.name = T2.name and T1.length = T2.length and T1.type = T2.type ) );
+NOTE: The "<>" operator is interpreted as "not equals".
+NOTE: Table WORK.T_WITH_VALID_FLG created, with 13 rows and 3 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.08 seconds
+      cpu time            0.05 seconds
+      
+MPRINT(TASKS):   proc sql noprint;
+MPRINT(TASKS):   create table work.ONLY_VALID_DATA as ( select * from work.T_WITH_VALID_FLG where err_desc <> "INVALID FORMAT" );
+NOTE: The "<>" operator is interpreted as "not equals".
+NOTE: Table WORK.ONLY_VALID_DATA created, with 13 rows and 3 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+      
+MPRINT(TASKS):   proc sql noprint;
+MPRINT(TASKS):   select count(name) into:lmvFiltered_Cnt from work.ONLY_VALID_DATA;
+MPRINT(TASKS):   select count(name) into:lmvValid_Cnt from valid_cont;
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.03 seconds
+      
+SYMBOLGEN:  Macro variable LMVFILTERED_CNT resolves to       13
+SYMBOLGEN:  Macro variable LMVVALID_CNT resolves to       13
+MLOGIC(TASKS):  %IF condition &lmvFiltered_Cnt. = &lmvValid_Cnt. is TRUE
+SYMBOLGEN:  Macro variable LMVLIB_NAME resolves to WORK
+SYMBOLGEN:  Macro variable LMVTABLE_NAME resolves to COURSE_MOVESALE_PART2
+MPRINT(TASKS):   proc append BASE = work.movesale_valid DATA = WORK.COURSE_MOVESALE_PART2;
+MPRINT(TASKS):   run;
+NOTE: Appending WORK.COURSE_MOVESALE_PART2 to WORK.MOVESALE_VALID.
+NOTE: There were 2000 observations read from the data set WORK.COURSE_MOVESALE_PART2.
+NOTE: 2000 observations added.
+NOTE: The data set WORK.MOVESALE_VALID has 3999 observations and 13 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+      
+MLOGIC(TASKS):  %DO loop index variable I is now 3; loop will iterate again.
+MLOGIC(TASKS):  %LET (variable name is LMVTABLE_NAME)
+SYMBOLGEN:  Macro variable MVTABLE_NAMES resolves to COURSE_MOVESALE_PART1 COURSE_MOVESALE_PART2 COURSE_MOVESALE_PART3 
+            COURSE_MOVESALE_PART4
+SYMBOLGEN:  Macro variable I resolves to 3
+MLOGIC(TASKS):  %LET (variable name is LMVLIB_NAME)
+SYMBOLGEN:  Macro variable MVLIB_NAMES resolves to WORK WORK WORK WORK
+SYMBOLGEN:  Macro variable I resolves to 3
+SYMBOLGEN:  Macro variable LMVLIB_NAME resolves to WORK
+SYMBOLGEN:  Macro variable LMVTABLE_NAME resolves to COURSE_MOVESALE_PART3
+MPRINT(TASKS):   proc contents noprint data=WORK.COURSE_MOVESALE_PART3 out=invalid_cont;
+NOTE: The data set WORK.INVALID_CONT has 13 observations and 41 variables.
+NOTE: PROCEDURE CONTENTS used (Total process time):
+      real time           0.06 seconds
+      cpu time            0.04 seconds
+      
+MPRINT(TASKS):   proc sql;
+MPRINT(TASKS):   create table work.CHECK_FOR_NEW_COLUMNS AS ( select T1.name, COALESCE(T2.name, 'INVALID COLUMN') AS CLMN_FLAG, 
+T2.length, T2.type from ( valid_cont T1 left join invalid_cont T2 on T1.name = T2.name ) );
+NOTE: Table WORK.CHECK_FOR_NEW_COLUMNS created, with 13 rows and 4 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.12 seconds
+      cpu time            0.03 seconds
+      
+MPRINT(TASKS):   proc sql;
+MPRINT(TASKS):   create table work.T_WITH_VALID_FLG as ( select T1.NAME, T1.CLMN_FLAG, COALESCE(T2.NAME, 'INVALID FORMAT') AS 
+ERR_DESC from ( (select * from work.CHECK_FOR_NEW_COLUMNS where clmn_flag <> "INVALID COLUMN") as T1 left join valid_cont as T2 on 
+T1.name = T2.name and T1.length = T2.length and T1.type = T2.type ) );
+NOTE: The "<>" operator is interpreted as "not equals".
+NOTE: Table WORK.T_WITH_VALID_FLG created, with 13 rows and 3 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.10 seconds
+      cpu time            0.03 seconds
+      
+MPRINT(TASKS):   proc sql noprint;
+MPRINT(TASKS):   create table work.ONLY_VALID_DATA as ( select * from work.T_WITH_VALID_FLG where err_desc <> "INVALID FORMAT" );
+NOTE: The "<>" operator is interpreted as "not equals".
+NOTE: Table WORK.ONLY_VALID_DATA created, with 13 rows and 3 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.02 seconds
+      
+MPRINT(TASKS):   proc sql noprint;
+MPRINT(TASKS):   select count(name) into:lmvFiltered_Cnt from work.ONLY_VALID_DATA;
+MPRINT(TASKS):   select count(name) into:lmvValid_Cnt from valid_cont;
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.02 seconds
+      cpu time            0.01 seconds
+      
+SYMBOLGEN:  Macro variable LMVFILTERED_CNT resolves to       13
+SYMBOLGEN:  Macro variable LMVVALID_CNT resolves to       13
+MLOGIC(TASKS):  %IF condition &lmvFiltered_Cnt. = &lmvValid_Cnt. is TRUE
+SYMBOLGEN:  Macro variable LMVLIB_NAME resolves to WORK
+SYMBOLGEN:  Macro variable LMVTABLE_NAME resolves to COURSE_MOVESALE_PART3
+MPRINT(TASKS):   proc append BASE = work.movesale_valid DATA = WORK.COURSE_MOVESALE_PART3;
+MPRINT(TASKS):   run;
+NOTE: Appending WORK.COURSE_MOVESALE_PART3 to WORK.MOVESALE_VALID.
+NOTE: There were 2000 observations read from the data set WORK.COURSE_MOVESALE_PART3.
+NOTE: 2000 observations added.
+NOTE: The data set WORK.MOVESALE_VALID has 5999 observations and 13 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.05 seconds
+      cpu time            0.03 seconds
+      
+MLOGIC(TASKS):  %DO loop index variable I is now 4; loop will iterate again.
+MLOGIC(TASKS):  %LET (variable name is LMVTABLE_NAME)
+SYMBOLGEN:  Macro variable MVTABLE_NAMES resolves to COURSE_MOVESALE_PART1 COURSE_MOVESALE_PART2 COURSE_MOVESALE_PART3 
+            COURSE_MOVESALE_PART4
+SYMBOLGEN:  Macro variable I resolves to 4
+MLOGIC(TASKS):  %LET (variable name is LMVLIB_NAME)
+SYMBOLGEN:  Macro variable MVLIB_NAMES resolves to WORK WORK WORK WORK
+SYMBOLGEN:  Macro variable I resolves to 4
+SYMBOLGEN:  Macro variable LMVLIB_NAME resolves to WORK
+SYMBOLGEN:  Macro variable LMVTABLE_NAME resolves to COURSE_MOVESALE_PART4
+MPRINT(TASKS):   proc contents noprint data=WORK.COURSE_MOVESALE_PART4 out=invalid_cont;
+NOTE: The data set WORK.INVALID_CONT has 13 observations and 41 variables.
+NOTE: PROCEDURE CONTENTS used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.01 seconds
+      
+MPRINT(TASKS):   proc sql;
+MPRINT(TASKS):   create table work.CHECK_FOR_NEW_COLUMNS AS ( select T1.name, COALESCE(T2.name, 'INVALID COLUMN') AS CLMN_FLAG, 
+T2.length, T2.type from ( valid_cont T1 left join invalid_cont T2 on T1.name = T2.name ) );
+NOTE: Table WORK.CHECK_FOR_NEW_COLUMNS created, with 13 rows and 4 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.18 seconds
+      cpu time            0.06 seconds
+      
+MPRINT(TASKS):   proc sql;
+MPRINT(TASKS):   create table work.T_WITH_VALID_FLG as ( select T1.NAME, T1.CLMN_FLAG, COALESCE(T2.NAME, 'INVALID FORMAT') AS 
+ERR_DESC from ( (select * from work.CHECK_FOR_NEW_COLUMNS where clmn_flag <> "INVALID COLUMN") as T1 left join valid_cont as T2 on 
+T1.name = T2.name and T1.length = T2.length and T1.type = T2.type ) );
+NOTE: The "<>" operator is interpreted as "not equals".
+NOTE: Table WORK.T_WITH_VALID_FLG created, with 13 rows and 3 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.05 seconds
+      cpu time            0.03 seconds
+      
+MPRINT(TASKS):   proc sql noprint;
+MPRINT(TASKS):   create table work.ONLY_VALID_DATA as ( select * from work.T_WITH_VALID_FLG where err_desc <> "INVALID FORMAT" );
+NOTE: The "<>" operator is interpreted as "not equals".
+NOTE: Table WORK.ONLY_VALID_DATA created, with 13 rows and 3 columns.
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.03 seconds
+      
+MPRINT(TASKS):   proc sql noprint;
+MPRINT(TASKS):   select count(name) into:lmvFiltered_Cnt from work.ONLY_VALID_DATA;
+MPRINT(TASKS):   select count(name) into:lmvValid_Cnt from valid_cont;
+MPRINT(TASKS):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.02 seconds
+      cpu time            0.01 seconds
+      
+SYMBOLGEN:  Macro variable LMVFILTERED_CNT resolves to       13
+SYMBOLGEN:  Macro variable LMVVALID_CNT resolves to       13
+MLOGIC(TASKS):  %IF condition &lmvFiltered_Cnt. = &lmvValid_Cnt. is TRUE
+SYMBOLGEN:  Macro variable LMVLIB_NAME resolves to WORK
+SYMBOLGEN:  Macro variable LMVTABLE_NAME resolves to COURSE_MOVESALE_PART4
+MPRINT(TASKS):   proc append BASE = work.movesale_valid DATA = WORK.COURSE_MOVESALE_PART4;
+MPRINT(TASKS):   run;
+NOTE: Appending WORK.COURSE_MOVESALE_PART4 to WORK.MOVESALE_VALID.
+NOTE: There were 2883 observations read from the data set WORK.COURSE_MOVESALE_PART4.
+NOTE: 2883 observations added.
+NOTE: The data set WORK.MOVESALE_VALID has 8882 observations and 13 variables.
+NOTE: PROCEDURE APPEND used (Total process time):
+      real time           0.03 seconds
+      cpu time            0.02 seconds
+      
+MLOGIC(TASKS):  %DO loop index variable I is now 5; loop will not iterate again.
+MLOGIC(TASKS):  Ending execution.
+779  
+780  
+781  %studio_hide_wrapper;
+MLOGIC(STUDIO_HIDE_WRAPPER):  Beginning execution.
+MLOGIC(STUDIO_HIDE_WRAPPER):  %GLOBAL  _STUDIONOTES
+MLOGIC(STUDIO_HIDE_WRAPPER):  %GLOBAL  _STUDIOSOURCE
+MLOGIC(STUDIO_HIDE_WRAPPER):  %GLOBAL  _STUDIOSTIMER
+SYMBOLGEN:  Macro variable _STUDIONOTES resolves to 
+MLOGIC(STUDIO_HIDE_WRAPPER):  %IF condition &_studionotes = is TRUE
+MLOGIC(STUDIO_HIDE_WRAPPER):  %LET (variable name is _STUDIONOTES)
+MPRINT(STUDIO_HIDE_WRAPPER):   options nonotes;
+SYMBOLGEN:  Macro variable _STUDIOSOURCE resolves to 
+MLOGIC(STUDIO_HIDE_WRAPPER):  %IF condition &_studiosource = is TRUE
+MLOGIC(STUDIO_HIDE_WRAPPER):  %LET (variable name is _STUDIOSOURCE)
+MPRINT(STUDIO_HIDE_WRAPPER):   options nosource;
+SYMBOLGEN:  Macro variable _STUDIOSTIMER resolves to 
+MLOGIC(STUDIO_HIDE_WRAPPER):  %IF condition &_studiostimer = is TRUE
+MLOGIC(STUDIO_HIDE_WRAPPER):  %LET (variable name is _STUDIOSTIMER)
+MPRINT(STUDIO_HIDE_WRAPPER):   options nostimer;
+MLOGIC(STUDIO_HIDE_WRAPPER):  Ending execution.
+SYMBOLGEN:  Macro variable GRAPHTERM resolves to GOPTIONS NOACCESSIBLE;
+MLOGIC(STUDIO_RESTORE_WRAPPER):  Beginning execution.
+MLOGIC(STUDIO_RESTORE_WRAPPER):  %GLOBAL  _STUDIONOTES
+MLOGIC(STUDIO_RESTORE_WRAPPER):  %GLOBAL  _STUDIOSOURCE
+MLOGIC(STUDIO_RESTORE_WRAPPER):  %GLOBAL  _STUDIOSTIMER
+SYMBOLGEN:  Macro variable _STUDIONOTES resolves to NOTES
+MPRINT(STUDIO_RESTORE_WRAPPER):   options NOTES;
+SYMBOLGEN:  Macro variable _STUDIOSOURCE resolves to SOURCE
+MPRINT(STUDIO_RESTORE_WRAPPER):   options SOURCE;
+SYMBOLGEN:  Macro variable _STUDIOSTIMER resolves to STIMER
+MPRINT(STUDIO_RESTORE_WRAPPER):   options STIMER;
+MLOGIC(STUDIO_RESTORE_WRAPPER):  %LET (variable name is _STUDIONOTES)
+MLOGIC(STUDIO_RESTORE_WRAPPER):  %LET (variable name is _STUDIOSOURCE)
+MLOGIC(STUDIO_RESTORE_WRAPPER):  %LET (variable name is _STUDIOSTIMER)
+MLOGIC(STUDIO_RESTORE_WRAPPER):  Ending execution.
+792  
+793  
+
+--------------------------------------------
